@@ -104,6 +104,7 @@ export async function createRouter(
 
   router.post('/analyze/:uploadId', async (request, response) => {
     const { uploadId } = request.params;
+    const { baseUrl } = request.body as { baseUrl?: string };
     const extractedPath = fileExtractor.getUploadPath(uploadId);
 
     try {
@@ -146,6 +147,7 @@ export async function createRouter(
             endpoints,
             detectedPaths,
             `API Project ${uploadId}`,
+            baseUrl,
           );
           
           analyzeResponse.openApiSpec = openApiSpec;

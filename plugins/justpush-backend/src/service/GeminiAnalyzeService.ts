@@ -146,6 +146,7 @@ OpenAPI Specification:`;
     endpoints: Endpoint[],
     detectedPaths: DetectedPath[],
     projectName: string = 'API Project',
+    baseUrl?: string,
   ): Promise<string> {
     if (!this.genAI || !this.model) {
       throw new Error('Gemini API key not configured. Please set GEMINI_API_KEY in environment or config.');
@@ -154,7 +155,7 @@ OpenAPI Specification:`;
     this.logger.info(`Generating OpenAPI spec from ${endpoints.length} detected endpoints`);
 
     try {
-      const prompt = this.buildEndpointsPrompt(endpoints, detectedPaths, projectName);
+      const prompt = this.buildEndpointsPrompt(endpoints, detectedPaths, projectName, baseUrl);
 
       this.logger.info('Calling Gemini API to generate OpenAPI spec from endpoints...');
       const result = await this.model.generateContent(prompt);
@@ -175,6 +176,7 @@ OpenAPI Specification:`;
     endpoints: Endpoint[],
     detectedPaths: DetectedPath[],
     projectName: string,
+    baseUrl?: string,
   ): string {
     const endpointsList = endpoints
       .map(e => `  ${e.method} ${e.path} (${e.file}:${e.line})`)
@@ -185,6 +187,8 @@ OpenAPI Specification:`;
       .filter(f => f)
       .join(', ');
 
+    const serverUrl = baseUrl || '/api';
+
     return `You are an expert API documentation specialist. Generate a complete and professional OpenAPI 3.0 specification in JSON format based on the following detected API endpoints.
 
 Project Information:
@@ -192,6 +196,7 @@ Project Information:
 - Detected Frameworks: ${frameworks || 'Unknown'}
 - Total Endpoints: ${endpoints.length}
 - Detected API Paths: ${detectedPaths.map(p => p.path).join(', ')}
+- Base URL: ${serverUrl}
 
 Detected Endpoints:
 ${endpointsList}
@@ -202,7 +207,14 @@ Instructions:
    - title: "${projectName} API"
    - version: "1.0.0"
    - description: Detailed description of the API's purpose and capabilities
-3. Define all detected endpoints under the paths section with:
+3. **IMPORTANT**: Add a servers section with the base URL:
+   "servers": [
+     {
+       "url": "${serverUrl}",
+       "description": "API Base URL"
+     }
+   ]
+4. Define all detected endpoints under the paths section with:
    - operationId: unique identifier for each operation
    - summary: brief description
    - description: detailed explanation of what the endpoint does
@@ -210,15 +222,15 @@ Instructions:
    - parameters: path, query, and header parameters with descriptions and types
    - requestBody: for POST/PUT/PATCH with proper schema and examples
    - responses: comprehensive response definitions with schemas and examples
-4. Create reusable schemas in components.schemas section:
+5. Create reusable schemas in components.schemas section:
    - Use proper JSON Schema definitions
    - Include descriptions for each field
    - Add examples for better understanding
    - Use appropriate data types (string, number, boolean, array, object)
-5. Add security schemes in components.securitySchemes if authentication is detected
-6. Use RESTful conventions and best practices
-7. Ensure all $ref references are properly defined
-8. Include proper error response schemas (400, 401, 404, 500)
+6. Add security schemes in components.securitySchemes if authentication is detected
+7. Use RESTful conventions and best practices
+8. Ensure all $ref references are properly defined
+9. Include proper error response schemas (400, 401, 404, 500)
 
 IMPORTANT: Generate ONLY valid JSON format OpenAPI 3.0 specification. Do not include markdown formatting, code blocks, or any explanatory text.
 
