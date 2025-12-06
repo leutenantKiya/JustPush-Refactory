@@ -1,11 +1,11 @@
 import { createDevApp } from '@backstage/dev-utils';
-import { apiImporterPlugin, ApiImporterPage } from '../src/plugin';
+import { justPushPlugin, JustPushPage } from '../src/plugin';
 
 createDevApp()
-  .registerPlugin(apiImporterPlugin)
+  .registerPlugin(justPushPlugin)
   .addPage({
-    element: <ApiImporterPage />,
-    title: 'Root Page',
-    path: '/api-importer',
+    element: <JustPushPage />,
+    title: 'JustPush Plugin',
+    path: '/justpush',
   })
   .render();

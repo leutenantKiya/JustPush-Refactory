@@ -1,7 +1,7 @@
-import { apiImporterPlugin } from './plugin';
+import { justPushPlugin } from './plugin';
 
 describe('api-importer', () => {
   it('should export plugin', () => {
-    expect(apiImporterPlugin).toBeDefined();
+    expect(justPushPlugin).toBeDefined();
   });
 });

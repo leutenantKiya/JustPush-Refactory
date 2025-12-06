@@ -28,15 +28,16 @@ export class ApiDetectorService {
     express: /express\(\)|require\(['"]express['"]\)|from ['"]express['"]/,
     fastify: /fastify\(\)|require\(['"]fastify['"]\)|from ['"]fastify['"]/,
     koa: /new Koa\(\)|require\(['"]koa['"]\)|from ['"]koa['"]/,
+    nestjs: /@(Get|Post|Put|Delete|Patch)\s*\(/,
   };
 
   private methodPatterns = {
-    get: /\.get\s*\(['"`]([^'"`]+)['"`]/g,
-    post: /\.post\s*\(['"`]([^'"`]+)['"`]/g,
-    put: /\.put\s*\(['"`]([^'"`]+)['"`]/g,
-    delete: /\.delete\s*\(['"`]([^'"`]+)['"`]/g,
-    patch: /\.patch\s*\(['"`]([^'"`]+)['"`]/g,
-    options: /\.options\s*\(['"`]([^'"`]+)['"`]/g,
+    get: /(?:app|router|route|server|api)\s*\.\s*get\s*\(\s*['"`]([^'"`]+)['"`]/gi,
+    post: /(?:app|router|route|server|api)\s*\.\s*post\s*\(\s*['"`]([^'"`]+)['"`]/gi,
+    put: /(?:app|router|route|server|api)\s*\.\s*put\s*\(\s*['"`]([^'"`]+)['"`]/gi,
+    delete: /(?:app|router|route|server|api)\s*\.\s*delete\s*\(\s*['"`]([^'"`]+)['"`]/gi,
+    patch: /(?:app|router|route|server|api)\s*\.\s*patch\s*\(\s*['"`]([^'"`]+)['"`]/gi,
+    options: /(?:app|router|route|server|api)\s*\.\s*options\s*\(\s*['"`]([^'"`]+)['"`]/gi,
   };
 
   constructor(logger: LoggerService, fileExtractor: FileExtractorService) {
@@ -121,16 +122,33 @@ export class ApiDetectorService {
         
         try {
           const content = await this.fileExtractor.readFile(filePath);
+          
+          if (!this.hasRoutingPattern(content)) {
+            continue;
+          }
+          
           const fileEndpoints = this.extractEndpoints(content, relativeFile);
           endpoints.push(...fileEndpoints);
         } catch (error: any) {
-          this.logger.warn(`Failed to read file ${relativeFile}: ${error.message}`);
+          this.logger.warn(`Failed to read ${relativeFile}: ${error.message}`);
         }
       }
     }
 
     this.logger.info(`Analyzed ${endpoints.length} endpoint(s)`);
     return endpoints;
+  }
+
+  private hasRoutingPattern(content: string): boolean {
+    const routingIndicators = [
+      /(?:app|router|route|server|api)\s*\.\s*(?:get|post|put|delete|patch|options)\s*\(/i,
+      /@(?:Get|Post|Put|Delete|Patch|Options)\s*\(/,
+      /\.route\s*\(/i,
+      /express\.Router\(/i,
+      /fastify\.register\(/i,
+    ];
+    
+    return routingIndicators.some(pattern => pattern.test(content));
   }
 
   private extractEndpoints(content: string, filePath: string): Endpoint[] {
