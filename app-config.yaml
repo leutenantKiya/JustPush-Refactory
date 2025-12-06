@@ -1,0 +1,120 @@
+app:
+  title: Scaffolded Backstage App
+  baseUrl: http://localhost:3000
+
+organization:
+  name: My Company
+
+backend:
+  # Used for enabling authentication, secret is shared by all backend plugins
+  # See https://backstage.io/docs/auth/service-to-service-auth for
+  # information on the format
+  # auth:
+  #   keys:
+  #     - secret: ${BACKEND_SECRET}
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+    # Uncomment the following host directive to bind to specific interfaces
+    # host: 127.0.0.1
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+    # Content-Security-Policy directives follow the Helmet format: https://helmetjs.github.io/#reference
+    # Default Helmet Content-Security-Policy values can be removed by setting the key to false
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  # This is for local development only, it is not recommended to use this in production
+  # The production database configuration is stored in app-config.production.yaml
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+  # workingDirectory: /tmp # Use this to configure a working directory for the scaffolder, defaults to the OS temp-dir
+
+integrations:
+  github:
+    - host: github.com
+      # This is a Personal Access Token or PAT from GitHub. You can find out how to generate this token, and more information
+      # about setting up the GitHub integration here: https://backstage.io/docs/integrations/github/locations#configuration
+      token: ${GITHUB_TOKEN}
+    ### Example for how to add your GitHub Enterprise instance using the API:
+    # - host: ghe.example.net
+    #   apiBaseUrl: https://ghe.example.net/api/v3
+    #   token: ${GHE_TOKEN}
+
+proxy:
+  '/api-importer':
+    target: http://localhost:7007/api/api-importer
+    changeOrigin: true
+
+# Reference documentation http://backstage.io/docs/features/techdocs/configuration
+# Note: After experimenting with basic setup, use CI/CD to generate docs
+# and an external cloud storage when deploying TechDocs for production use-case.
+# https://backstage.io/docs/features/techdocs/how-to-guides#how-to-migrate-from-techdocs-basic-to-recommended-deployment-approach
+techdocs:
+  builder: 'local' # Alternatives - 'external'
+  generator:
+    runIn: 'docker' # Alternatives - 'local'
+  publisher:
+    type: 'local' # Alternatives - 'googleGcs' or 'awsS3'. Read documentation for using alternatives.
+
+auth:
+  # see https://backstage.io/docs/auth/ to learn about auth providers
+  providers:
+    # See https://backstage.io/docs/auth/guest/provider
+    guest: 
+      dangerouslyAllowSignInWithoutUserInCatalog: true
+
+scaffolder:
+  # see https://backstage.io/docs/features/software-templates/configuration for software template options
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location]
+  locations:
+    # Local example data, file locations are relative to the backend process, typically `packages/backend`
+    - type: file
+      target: ../../examples/entities.yaml
+
+    # Local example template
+    - type: file
+      target: ../../examples/template/template.yaml
+      rules:
+        - allow: [Template]
+
+    # Local example organizational data
+    - type: file
+      target: ../../examples/org.yaml
+      rules:
+        - allow: [User, Group]
+
+    ## Uncomment these lines to add more example data
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
+
+    ## Uncomment these lines to add an example org
+    # - type: url
+    #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/acme-corp.yaml
+    #   rules:
+    #     - allow: [User, Group]
+
+kubernetes:
+  serviceLocatorMethod:
+    type: 'multiTenant'
+  clusterLocatorMethods:
+    - type: 'config'
+      clusters:
+        - url: "https://103.185.52.178:6443"
+          name: mau-menang-sa
+          authProvider: 'serviceAccount'
+          serviceAccountToken: eyJhbGciOiJSUzI1NiIsImtpZCI6ImU0bVdQV2tVSWVaWWFaRXpQZmJUdnd0WUt2eWpKOHF3OWlEQWI2SnAxQkkifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJtYXUtbWVuYW5nIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6Im1hdS1tZW5hbmctc2EtdG9rZW4iLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoibWF1LW1lbmFuZy1zYSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjIxYjhhYWNmLTIxZDMtNGQ2NS05NjZlLWQzMWYzMzY0Mzc1NyIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDptYXUtbWVuYW5nOm1hdS1tZW5hbmctc2EifQ.FM9OOX3hB99nuXPmRf7oqL58ugBu0KQbPBiU-H39qJ2eHioZwLoxiopsYtuSyPTGhdcGFtDc_d-9GwevhtP6uuG1WGuQsAAvt4CPDS_1vgjO9XDdEq7OBz7B3-nynJ0hM3Qlw80Oqj9iU9x2qzcN5YBJlEVcDvzoxG9nmFQta5GkzJAJtNBSCnxKzdjJVkC3hBF3zMB4j9FlVt3YYFeI4cmKMWZ7CDDojFo37lOj_KGG1dCwMD7Xs-lGLQik9_g0-39F4OPmGKzLSd-A9TlrW-OPGZhpsEStchISi1DTi-dyseLY9HrwKxee-wVl3_9c2WUHY8pKPRxvZbxyWrr3bw
+          skipTLSVerify: false
+
+# see https://backstage.io/docs/permissions/getting-started for more on the permission framework
+permission:
+  # setting this to `false` will disable permissions
+  enabled: true
