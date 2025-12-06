@@ -19,12 +19,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextareaAutosize,
 } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
@@ -39,45 +33,96 @@ import { useApi, fetchApiRef, discoveryApiRef } from '@backstage/core-plugin-api
 import type { DetectedPath, AnalyzeResponse } from '@internal/backstage-plugin-justpush-backend';
 
 const useStyles = makeStyles(theme => ({
-  paper: {
-    padding: theme.spacing(3),
+  root: {
+    maxWidth: 1400,
+    margin: '0 auto',
+  },
+  header: {
     marginBottom: theme.spacing(3),
+  },
+  paper: {
+    padding: theme.spacing(2.5),
+    marginBottom: theme.spacing(2),
   },
   uploadArea: {
     border: `2px dashed ${theme.palette.divider}`,
     borderRadius: theme.shape.borderRadius,
-    padding: theme.spacing(4),
+    padding: theme.spacing(3),
     textAlign: 'center',
     cursor: 'pointer',
+    transition: 'all 0.2s',
     '&:hover': {
       backgroundColor: theme.palette.action.hover,
+      borderColor: theme.palette.primary.main,
     },
   },
-  button: {
-    marginTop: theme.spacing(2),
+  compactButton: {
+    marginTop: theme.spacing(1.5),
   },
   pathCard: {
-    marginBottom: theme.spacing(2),
+    marginBottom: theme.spacing(1.5),
+    '& .MuiCardContent-root': {
+      padding: theme.spacing(2),
+      '&:last-child': {
+        paddingBottom: theme.spacing(2),
+      },
+    },
   },
   chip: {
-    marginRight: theme.spacing(1),
-  },
-  endpointCard: {
-    marginTop: theme.spacing(2),
+    marginRight: theme.spacing(0.5),
+    marginBottom: theme.spacing(0.5),
+    height: 24,
   },
   methodChip: {
-    marginRight: theme.spacing(1),
-    fontWeight: 'bold',
+    marginRight: theme.spacing(0.5),
+    fontWeight: 600,
+    height: 24,
+    fontSize: '0.75rem',
   },
   specTextarea: {
     width: '100%',
-    minHeight: 400,
-    fontFamily: 'monospace',
-    fontSize: 12,
-    padding: theme.spacing(2),
+    minHeight: 300,
+    maxHeight: 400,
+    fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+    fontSize: 11,
+    padding: theme.spacing(1.5),
     border: `1px solid ${theme.palette.divider}`,
     borderRadius: theme.shape.borderRadius,
     backgroundColor: theme.palette.background.default,
+    resize: 'vertical',
+  },
+  summaryBox: {
+    display: 'flex',
+    gap: theme.spacing(2),
+    marginBottom: theme.spacing(2),
+  },
+  summaryCard: {
+    flex: 1,
+    padding: theme.spacing(1.5),
+    textAlign: 'center',
+    backgroundColor: theme.palette.background.default,
+    borderRadius: theme.shape.borderRadius,
+  },
+  endpointList: {
+    maxHeight: 350,
+    overflow: 'auto',
+    '& .MuiListItem-root': {
+      paddingTop: theme.spacing(0.75),
+      paddingBottom: theme.spacing(0.75),
+    },
+  },
+  compactAccordion: {
+    boxShadow: 'none',
+    '&:before': {
+      display: 'none',
+    },
+    '& .MuiAccordionSummary-root': {
+      minHeight: 40,
+      padding: theme.spacing(0, 1),
+    },
+    '& .MuiAccordionDetails-root': {
+      padding: theme.spacing(1),
+    },
   },
 }));
 
@@ -221,55 +266,56 @@ export const ImporterComponent = () => {
   };
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" gutterBottom>
-        JustPush - API Normalization Tool
-      </Typography>
-      <Typography variant="body2" color="textSecondary" paragraph>
-        Upload ZIP file or import from GitHub to automatically detect and analyze API endpoints.
-        OpenAPI specifications are automatically generated using Gemini AI.
-      </Typography>
+    <Box p={2} className={classes.root}>
+      <Box className={classes.header}>
+        <Typography variant="h4" gutterBottom style={{ fontWeight: 600 }}>
+          JustPush
+        </Typography>
+        <Typography variant="body2" color="textSecondary">
+          Auto-detect API endpoints and generate OpenAPI specs with AI
+        </Typography>
+      </Box>
 
       <Paper className={classes.paper}>
-        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
+        <Tabs 
+          value={tabValue} 
+          onChange={(_, newValue) => setTabValue(newValue)}
+          variant="fullWidth"
+        >
           <Tab label="Upload ZIP" icon={<CloudUploadIcon />} />
-          <Tab label="Import from GitHub" icon={<GitHubIcon />} />
+          <Tab label="GitHub" icon={<GitHubIcon />} />
         </Tabs>
 
-        <Box mt={3}>
+        <Box mt={2}>
           {tabValue === 0 && (
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Box className={classes.uploadArea} onClick={() => document.getElementById('file-input')?.click()}>
-                  <input
-                    id="file-input"
-                    type="file"
-                    accept=".zip"
-                    style={{ display: 'none' }}
-                    onChange={handleFileChange}
-                  />
-                  <CloudUploadIcon style={{ fontSize: 48, color: '#999' }} />
-                  <Typography variant="h6">
-                    {file ? file.name : 'Click to select ZIP file'}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Maximum file size: 100MB
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  fullWidth
-                  onClick={handleUploadZip}
-                  disabled={!file || loading}
-                  className={classes.button}
-                >
-                  {loading ? <CircularProgress size={24} /> : 'Upload and Detect APIs'}
-                </Button>
-              </Grid>
-            </Grid>
+            <>
+              <Box className={classes.uploadArea} onClick={() => document.getElementById('file-input')?.click()}>
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".zip"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                <CloudUploadIcon style={{ fontSize: 40, color: '#999' }} />
+                <Typography variant="body1" style={{ marginTop: 8 }}>
+                  {file ? file.name : 'Click to select ZIP file'}
+                </Typography>
+                <Typography variant="caption" color="textSecondary">
+                  Max 100MB
+                </Typography>
+              </Box>
+              <Button
+                variant="contained"
+                color="primary"
+                fullWidth
+                onClick={handleUploadZip}
+                disabled={!file || loading}
+                className={classes.compactButton}
+              >
+                {loading ? <CircularProgress size={20} /> : 'Upload & Detect'}
+              </Button>
+            </>
           )}
 
           {tabValue === 1 && (
@@ -277,17 +323,18 @@ export const ImporterComponent = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="GitHub Repository URL"
+                  size="small"
+                  label="Repository URL"
                   variant="outlined"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo"
-                  helperText="Enter full GitHub repository URL"
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={6}>
                 <TextField
                   fullWidth
+                  size="small"
                   label="Branch"
                   variant="outlined"
                   value={branch}
@@ -295,10 +342,11 @@ export const ImporterComponent = () => {
                   placeholder="main"
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={6}>
                 <TextField
                   fullWidth
-                  label="Subdirectory (optional)"
+                  size="small"
+                  label="Path (optional)"
                   variant="outlined"
                   value={path}
                   onChange={(e) => setPath(e.target.value)}
@@ -312,16 +360,15 @@ export const ImporterComponent = () => {
                   fullWidth
                   onClick={handleImportGitHub}
                   disabled={!githubUrl || loading}
-                  className={classes.button}
                 >
-                  {loading ? <CircularProgress size={24} /> : 'Import and Detect APIs'}
+                  {loading ? <CircularProgress size={20} /> : 'Import & Detect'}
                 </Button>
               </Grid>
             </Grid>
           )}
         </Box>
 
-        {loading && <LinearProgress style={{ marginTop: 16 }} />}
+        {loading && <LinearProgress style={{ marginTop: 12 }} />}
 
         {error && (
           <Box mt={2}>
@@ -332,45 +379,49 @@ export const ImporterComponent = () => {
 
       {detectedPaths.length > 0 && (
         <Paper className={classes.paper}>
-          <Typography variant="h5" gutterBottom>
-            <FolderIcon style={{ verticalAlign: 'middle', marginRight: 8 }} />
-            Detected API Paths ({detectedPaths.length})
-          </Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+            <Typography variant="h6" style={{ fontWeight: 600 }}>
+              <FolderIcon style={{ verticalAlign: 'middle', marginRight: 8, fontSize: 20 }} />
+              Detected Paths ({detectedPaths.length})
+            </Typography>
+          </Box>
 
           {detectedPaths.map((detected, index) => (
-            <Card key={index} className={classes.pathCard}>
+            <Card key={index} className={classes.pathCard} variant="outlined">
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography variant="h6">
-                      <CodeIcon style={{ verticalAlign: 'middle', marginRight: 8 }} />
+                  <Box flex={1}>
+                    <Typography variant="body1" style={{ fontWeight: 500, marginBottom: 6 }}>
+                      <CodeIcon style={{ verticalAlign: 'middle', marginRight: 4, fontSize: 18 }} />
                       {detected.path}
                     </Typography>
-                    <Box mt={1}>
+                    <Box>
                       <Chip label={detected.type} size="small" className={classes.chip} color="primary" />
-                      <Chip label={`Confidence: ${(detected.confidence * 100).toFixed(0)}%`} size="small" className={classes.chip} />
+                      <Chip label={`${(detected.confidence * 100).toFixed(0)}%`} size="small" className={classes.chip} />
                       {detected.framework && (
                         <Chip label={detected.framework} size="small" className={classes.chip} color="secondary" />
                       )}
-                      <Chip label={`${detected.files.length} files`} size="small" />
+                      <Chip label={`${detected.files.length} files`} size="small" className={classes.chip} />
                     </Box>
                   </Box>
                 </Box>
-                <Accordion style={{ marginTop: 16 }}>
+                <Accordion className={classes.compactAccordion}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography>View Files ({detected.files.length})</Typography>
+                    <Typography variant="body2">Files ({detected.files.length})</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <List dense>
-                      {detected.files.slice(0, 20).map((file, idx) => (
-                        <ListItem key={idx}>
-                          <ListItemText primary={file} />
+                    <List dense disablePadding>
+                      {detected.files.slice(0, 10).map((file, idx) => (
+                        <ListItem key={idx} style={{ paddingLeft: 0 }}>
+                          <ListItemText 
+                            primary={<Typography variant="caption">{file}</Typography>} 
+                          />
                         </ListItem>
                       ))}
-                      {detected.files.length > 20 && (
-                        <ListItem>
-                          <ListItemText primary={`... and ${detected.files.length - 20} more`} />
-                        </ListItem>
+                      {detected.files.length > 10 && (
+                        <Typography variant="caption" color="textSecondary">
+                          ... and {detected.files.length - 10} more
+                        </Typography>
                       )}
                     </List>
                   </AccordionDetails>
@@ -385,138 +436,156 @@ export const ImporterComponent = () => {
             fullWidth
             onClick={handleAnalyze}
             disabled={analyzing}
-            className={classes.button}
+            style={{ marginTop: 8 }}
           >
-            {analyzing ? <CircularProgress size={24} /> : 'Analyze Endpoints'}
+            {analyzing ? <CircularProgress size={20} /> : 'Analyze Endpoints'}
           </Button>
         </Paper>
       )}
 
       {analyzeResult && (
         <Paper className={classes.paper}>
-          <Typography variant="h5" gutterBottom>
+          <Typography variant="h6" gutterBottom style={{ fontWeight: 600 }}>
             Analysis Results
           </Typography>
 
-          <Grid container spacing={2} style={{ marginBottom: 16 }}>
-            <Grid item xs={12} sm={4}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Endpoints
-                  </Typography>
-                  <Typography variant="h4">
+          <Grid container spacing={2}>
+            {/* Left side - API Summary */}
+            <Grid item xs={12} md={6}>
+              <Box className={classes.summaryBox}>
+                <Paper className={classes.summaryCard} variant="outlined">
+                  <Typography variant="h4" color="primary" style={{ fontWeight: 700 }}>
                     {analyzeResult.summary.totalEndpoints}
                   </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} sm={8}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    By Method
+                  <Typography variant="caption" color="textSecondary">
+                    Endpoints
                   </Typography>
-                  <Box>
-                    {Object.entries(analyzeResult.summary.byMethod).map(([method, count]) => (
-                      <Chip
-                        key={method}
-                        label={`${method}: ${count}`}
-                        className={classes.chip}
-                        color={getMethodColor(method)}
-                      />
-                    ))}
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+                </Paper>
+                <Paper className={classes.summaryCard} variant="outlined">
+                  <Typography variant="h4" color="secondary" style={{ fontWeight: 700 }}>
+                    {Object.keys(analyzeResult.summary.byMethod).length}
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    Methods
+                  </Typography>
+                </Paper>
+              </Box>
 
-          <Typography variant="h6" gutterBottom>
-            Endpoints ({analyzeResult.endpoints.length})
-          </Typography>
-          
-          <TableContainer component={Paper} className={classes.endpointCard}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Method</TableCell>
-                  <TableCell>Path</TableCell>
-                  <TableCell>File</TableCell>
-                  <TableCell align="right">Line</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {analyzeResult.endpoints.slice(0, 100).map((endpoint, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <Chip
-                        label={endpoint.method}
-                        size="small"
-                        color={getMethodColor(endpoint.method)}
-                        className={classes.methodChip}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <code>{endpoint.path}</code>
-                    </TableCell>
-                    <TableCell>{endpoint.file}</TableCell>
-                    <TableCell align="right">{endpoint.line}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          {analyzeResult.endpoints.length > 100 && (
-            <Typography variant="body2" color="textSecondary" style={{ marginTop: 16, textAlign: 'center' }}>
-              Showing first 100 of {analyzeResult.endpoints.length} endpoints
-            </Typography>
-          )}
-
-          {analyzeResult.openApiSpec && (
-            <Box mt={4}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                <Typography variant="h6">
-                  Generated OpenAPI Specification
+              <Box mb={1.5}>
+                <Typography variant="body2" color="textSecondary" gutterBottom>
+                  By Method
                 </Typography>
                 <Box>
-                  {analyzeResult.geminiMetadata && (
-                    <Chip 
-                      label={`Generated with ${analyzeResult.geminiMetadata.model}`}
+                  {Object.entries(analyzeResult.summary.byMethod).map(([method, count]) => (
+                    <Chip
+                      key={method}
+                      label={`${method}: ${count}`}
+                      className={classes.chip}
+                      color={getMethodColor(method)}
                       size="small"
-                      color="primary"
-                      style={{ marginRight: 8 }}
                     />
-                  )}
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    startIcon={<GetAppIcon />}
-                    onClick={() => {
-                      const blob = new Blob([analyzeResult.openApiSpec!], { type: 'text/yaml' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'openapi-spec.yaml';
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    }}
-                  >
-                    Download YAML
-                  </Button>
+                  ))}
                 </Box>
               </Box>
-              <TextareaAutosize
-                className={classes.specTextarea}
-                value={analyzeResult.openApiSpec}
-                readOnly
-                placeholder="OpenAPI specification..."
-              />
-            </Box>
-          )}
+
+              <Box>
+                <Typography variant="body2" color="textSecondary" gutterBottom>
+                  Endpoints
+                </Typography>
+                <List dense disablePadding className={classes.endpointList}>
+                  {(() => {
+                    const grouped = analyzeResult.endpoints.reduce((acc, endpoint) => {
+                      if (!acc[endpoint.path]) {
+                        acc[endpoint.path] = [];
+                      }
+                      acc[endpoint.path].push(endpoint);
+                      return acc;
+                    }, {} as Record<string, typeof analyzeResult.endpoints>);
+
+                    return Object.entries(grouped).map(([path, endpoints]) => (
+                      <ListItem key={path} style={{ paddingLeft: 0, paddingRight: 0 }}>
+                        <ListItemText
+                          primary={
+                            <Box display="flex" alignItems="center" flexWrap="wrap">
+                              {endpoints.map((ep, idx) => (
+                                <Chip
+                                  key={idx}
+                                  label={ep.method}
+                                  size="small"
+                                  color={getMethodColor(ep.method)}
+                                  className={classes.methodChip}
+                                />
+                              ))}
+                              <code style={{ fontSize: 12 }}>{path}</code>
+                            </Box>
+                          }
+                          secondary={
+                            <Typography variant="caption" color="textSecondary">
+                              {endpoints[0].file}:{endpoints[0].line}
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    ));
+                  })()}
+                </List>
+              </Box>
+            </Grid>
+
+            {/* Right side - OpenAPI Spec */}
+            <Grid item xs={12} md={6}>
+              {analyzeResult.openApiSpec && (
+                <>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+                    <Typography variant="body2" color="textSecondary">
+                      OpenAPI Specification
+                    </Typography>
+                    <Box>
+                      {analyzeResult.geminiMetadata && (
+                        <Chip 
+                          label={analyzeResult.geminiMetadata.model}
+                          size="small"
+                          color="primary"
+                          style={{ marginRight: 8, height: 24 }}
+                        />
+                      )}
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<GetAppIcon style={{ fontSize: 16 }} />}
+                        onClick={() => {
+                          const blob = new Blob([analyzeResult.openApiSpec!], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'openapi-spec.json';
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        Download
+                      </Button>
+                    </Box>
+                  </Box>
+                  <TextareaAutosize
+                    className={classes.specTextarea}
+                    value={(() => {
+                      const spec = analyzeResult.openApiSpec;
+                      const words = spec.split(/\s+/);
+                      if (words.length > 300) {
+                        return words.slice(0, 300).join(' ') + '\n\n... (truncated, download full spec)';
+                      }
+                      return spec;
+                    })()}
+                    readOnly
+                    placeholder="OpenAPI specification..."
+                  />
+                </>
+              )}
+            </Grid>
+          </Grid>
         </Paper>
       )}
     </Box>

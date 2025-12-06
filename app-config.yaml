@@ -89,6 +89,16 @@ catalog:
     - allow: [Component, System, API, Resource, Location, User, Group, Template]
   locations: []
 
+containerRegistry:
+  url: ${CONTAINER_REGISTRY_URL}
+  username: ${CONTAINER_REGISTRY_USER}
+  password: ${CONTAINER_REGISTRY_PASSWORD}
+
+kong:
+  adminUrl: ${KONG_ADMIN_URL}
+  adminToken: ${KONG_ADMIN_TOKEN}
+  gatewayUrl: ${KONG_GATEWAY_URL} 
+
 kubernetes:
   serviceLocatorMethod:
     type: 'multiTenant'
@@ -100,6 +110,23 @@ kubernetes:
           authProvider: 'serviceAccount'
           serviceAccountToken: ${K8S_SERVICE_ACCOUNT_TOKEN}
           skipTLSVerify: false
+          namespace: "justpush-apps" # Default namespace for deployments
+
+# Deployment pipeline configuration
+deployment:
+  registry:
+    url: ${CONTAINER_REGISTRY_URL}
+    username: ${CONTAINER_REGISTRY_USER}
+    password: ${CONTAINER_REGISTRY_PASSWORD}
+  kubernetes:
+    apiServer: "https://103.185.52.178:6443"
+    namespace: "justpush-apps"
+    serviceAccountToken: ${K8S_SERVICE_ACCOUNT_TOKEN}
+    skipTlsVerify: false
+  kong:
+    adminUrl: ${KONG_ADMIN_URL}
+    adminToken: ${KONG_ADMIN_TOKEN}
+    gatewayUrl: ${KONG_GATEWAY_URL}
 
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:

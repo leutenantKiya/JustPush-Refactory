@@ -28,13 +28,37 @@ export class GitHubService {
 
     try {
       this.logger.info(`Cloning repository: ${repoUrl} (branch: ${branch})`);
+      this.logger.debug(`Has GitHub token: ${!!this.githubToken}, Token length: ${this.githubToken?.length || 0}`);
 
       let authenticatedUrl = repoUrl;
       if (this.githubToken && repoUrl.includes('github.com')) {
-        const urlObj = new URL(repoUrl.replace('git@github.com:', 'https://github.com/'));
-        authenticatedUrl = `https://${this.githubToken}@${urlObj.host}${urlObj.pathname}`;
+        // Convert SSH URL to HTTPS if needed
+        let httpsUrl = repoUrl;
+        if (repoUrl.startsWith('git@github.com:')) {
+          httpsUrl = repoUrl.replace('git@github.com:', 'https://github.com/');
+          this.logger.debug(`Converted SSH to HTTPS: ${httpsUrl}`);
+        }
+        
+        // Add .git suffix if not present
+        if (!httpsUrl.endsWith('.git')) {
+          httpsUrl = httpsUrl + '.git';
+        }
+        
+        // Parse URL and inject token
+        try {
+          const urlObj = new URL(httpsUrl);
+          authenticatedUrl = `https://${this.githubToken}@${urlObj.hostname}${urlObj.pathname}`;
+          this.logger.info('Successfully created authenticated GitHub URL');
+        } catch (urlError) {
+          this.logger.warn('Failed to parse URL, using original URL');
+          authenticatedUrl = httpsUrl;
+        }
+      } else {
+        this.logger.warn(`Not using GitHub authentication - hasToken: ${!!this.githubToken}, isGitHub: ${repoUrl.includes('github.com')}`);
       }
 
+      this.logger.debug(`Final clone URL: ${authenticatedUrl.replace(this.githubToken || '', '***TOKEN***')}`);
+      
       try {
         await this.git.clone(authenticatedUrl, localPath, ['--depth', '1', '--branch', branch]);
       } catch (branchError: any) {
@@ -59,14 +83,29 @@ export class GitHubService {
 
       return { cloneId, localPath };
     } catch (error: any) {
-      this.logger.error(`Failed to clone repository: ${error.message}`);
+      this.logger.error(`Failed to clone repository: ${error.message}`, { 
+        repoUrl, 
+        branch,
+        hasToken: !!this.githubToken,
+        tokenLength: this.githubToken?.length || 0,
+        errorStack: error.stack
+      });
+      
+      // Log the actual git error for debugging
+      if (error.git) {
+        this.logger.error('Git error details:', error.git);
+      }
       
       await fs.remove(localPath).catch(() => {});
       
       if (error.message.includes('not found') || error.message.includes('404')) {
         throw new Error('Repository not found. Please check the URL and make sure the repository exists.');
-      } else if (error.message.includes('Authentication failed') || error.message.includes('403')) {
-        throw new Error('Authentication failed. The repository may be private and require a GitHub token.');
+      } else if (error.message.includes('Authentication failed') || error.message.includes('403') || error.message.includes('401') || error.message.includes('Unauthorized')) {
+        if (this.githubToken) {
+          throw new Error(`Authentication failed. Please check your GitHub token permissions (repo scope required for private repos). Token length: ${this.githubToken.length}`);
+        } else {
+          throw new Error('Authentication required. The repository may be private. Please configure GITHUB_TOKEN in .env file.');
+        }
       } else if (error.message.includes('Could not resolve host')) {
         throw new Error('Network error. Please check your internet connection.');
       }

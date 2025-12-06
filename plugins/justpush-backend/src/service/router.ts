@@ -7,7 +7,9 @@ import { FileExtractorService } from './FileExtractorService';
 import { GitHubService } from './GitHubService';
 import { ApiDetectorService } from './ApiDetectorService';
 import { GeminiAnalyzeService } from './GeminiAnalyzeService';
+import { DeploymentManagerService } from './DeploymentManagerService';
 import { AnalyzeResponse, GitHubImportRequest, UploadResponse } from '../types/api';
+import { DeployRequest, ScaleRequest } from '../types/deployment';
 
 export interface RouterOptions {
   logger: LoggerService;
@@ -19,6 +21,7 @@ let sharedFileExtractor: FileExtractorService | null = null;
 let sharedGitHubService: GitHubService | null = null;
 let sharedApiDetector: ApiDetectorService | null = null;
 let sharedGeminiService: GeminiAnalyzeService | null = null;
+let sharedDeploymentManager: DeploymentManagerService | null = null;
 
 export async function createRouter(
   options: RouterOptions,
@@ -50,9 +53,16 @@ export async function createRouter(
       const githubConfigs = config.getOptionalConfigArray('integrations.github');
       if (githubConfigs && githubConfigs.length > 0) {
         githubToken = githubConfigs[0].getOptionalString('token');
+        if (githubToken) {
+          logger.info(`GitHub token configured (length: ${githubToken.length})`);
+        } else {
+          logger.warn('GitHub token not found in config');
+        }
+      } else {
+        logger.warn('No GitHub integration config found');
       }
-    } catch (error) {
-      logger.debug('Could not read GitHub token from config');
+    } catch (error: any) {
+      logger.error('Error reading GitHub token from config', { error: error.message });
     }
     sharedGitHubService = new GitHubService(logger, '/tmp/backstage-git-clones', githubToken);
     logger.info('Created new GitHubService instance');
@@ -66,10 +76,45 @@ export async function createRouter(
     sharedGeminiService = new GeminiAnalyzeService(logger, geminiApiKey);
   }
 
+  if (!sharedDeploymentManager) {
+    const registryUrl = config.getOptionalString('deployment.registry.url') || 'localhost:5000';
+    const registryUser = config.getOptionalString('deployment.registry.username');
+    const registryPassword = config.getOptionalString('deployment.registry.password');
+    const k8sApiServer = config.getOptionalString('deployment.kubernetes.apiServer') || 'https://kubernetes.default.svc';
+    const k8sNamespace = config.getOptionalString('deployment.kubernetes.namespace') || 'justpush';
+    const k8sToken = config.getOptionalString('deployment.kubernetes.serviceAccountToken');
+    const k8sSkipTls = config.getOptionalBoolean('deployment.kubernetes.skipTlsVerify') || false;
+    const kongAdminUrl = config.getOptionalString('deployment.kong.adminUrl') || 'http://kong-admin:8001';
+    const kongAdminToken = config.getOptionalString('deployment.kong.adminToken');
+    const kongGatewayUrl = config.getOptionalString('deployment.kong.gatewayUrl') || 'http://kong-gateway:8000';
+
+    sharedDeploymentManager = new DeploymentManagerService(logger, {
+      uploadDir: '/tmp/backstage-uploads',
+      registry: {
+        url: registryUrl,
+        username: registryUser,
+        password: registryPassword,
+      },
+      kubernetes: {
+        apiServer: k8sApiServer,
+        namespace: k8sNamespace,
+        serviceAccountToken: k8sToken,
+        skipTlsVerify: k8sSkipTls,
+      },
+      kong: {
+        adminUrl: kongAdminUrl,
+        adminToken: kongAdminToken,
+        gatewayUrl: kongGatewayUrl,
+      },
+    });
+    logger.info('Created new DeploymentManagerService instance');
+  }
+
   const fileExtractor = sharedFileExtractor;
   const githubService = sharedGitHubService;
   const apiDetector = sharedApiDetector;
   const geminiService = sharedGeminiService;
+  const deploymentManager = sharedDeploymentManager;
 
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -273,6 +318,206 @@ export async function createRouter(
       logger.error('Cleanup failed', error);
       response.status(500).json({
         error: 'Failed to cleanup',
+        message: error.message,
+      });
+    }
+  });
+
+  router.post('/deploy/:uploadId', async (request, response) => {
+    const { uploadId } = request.params;
+    const {
+      projectType = 'nodejs',
+      framework,
+      replicas = 1,
+      resources,
+      environment,
+      ports,
+      openApiSpec,
+      kongPlugins,
+    } = request.body as DeployRequest;
+
+    logger.info(`[DEPLOY] Starting deployment for ${uploadId}`);
+
+    try {
+      const metadata = await deploymentManager.deploy({
+        uploadId,
+        projectType,
+        framework,
+        replicas,
+        resources,
+        environment,
+        ports,
+        openApiSpec,
+        kongPlugins,
+      });
+
+      logger.info(`[DEPLOY] Successfully deployed ${uploadId}`);
+      return response.json(metadata);
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to deploy ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to deploy',
+        message: error.message,
+      });
+    }
+  });
+
+  router.get('/deploy/:uploadId/status', async (request, response) => {
+    const { uploadId } = request.params;
+
+    try {
+      const metadata = await deploymentManager.getDeploymentStatus(uploadId);
+
+      if (!metadata) {
+        return response.status(404).json({
+          error: 'Deployment not found',
+        });
+      }
+
+      return response.json(metadata);
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to get status for ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to get deployment status',
+        message: error.message,
+      });
+    }
+  });
+
+  router.get('/deploy/:uploadId/logs', async (request, response) => {
+    const { uploadId } = request.params;
+    const tailLines = parseInt(request.query.tail as string) || 100;
+
+    try {
+      const logs = await deploymentManager.getLogs(uploadId, tailLines);
+      return response.json({ logs });
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to get logs for ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to get logs',
+        message: error.message,
+      });
+    }
+  });
+
+  router.put('/deploy/:uploadId/scale', async (request, response) => {
+    const { uploadId } = request.params;
+    const { replicas } = request.body as ScaleRequest;
+
+    if (!replicas || replicas < 0) {
+      return response.status(400).json({
+        error: 'Invalid replicas value',
+      });
+    }
+
+    logger.info(`[DEPLOY] Scaling ${uploadId} to ${replicas} replicas`);
+
+    try {
+      await deploymentManager.scale(uploadId, replicas);
+      return response.json({ success: true, replicas });
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to scale ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to scale deployment',
+        message: error.message,
+      });
+    }
+  });
+
+  router.post('/deploy/:uploadId/redeploy', async (request, response) => {
+    const { uploadId } = request.params;
+
+    logger.info(`[DEPLOY] Redeploying ${uploadId}`);
+
+    try {
+      const metadata = await deploymentManager.redeploy(uploadId);
+      return response.json(metadata);
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to redeploy ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to redeploy',
+        message: error.message,
+      });
+    }
+  });
+
+  router.delete('/deploy/:uploadId', async (request, response) => {
+    const { uploadId } = request.params;
+
+    logger.info(`[DEPLOY] Deleting deployment ${uploadId}`);
+
+    try {
+      await deploymentManager.delete(uploadId);
+      return response.json({ success: true });
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to delete ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to delete deployment',
+        message: error.message,
+      });
+    }
+  });
+
+  router.get('/deploy/list', async (_, response) => {
+    try {
+      const deployments = await deploymentManager.listDeployments();
+      return response.json({ deployments });
+    } catch (error: any) {
+      logger.error('[DEPLOY] Failed to list deployments', { error });
+      return response.status(500).json({
+        error: 'Failed to list deployments',
+        message: error.message,
+      });
+    }
+  });
+
+  router.get('/deploy/:uploadId/metrics', async (request, response) => {
+    const { uploadId } = request.params;
+
+    try {
+      const metrics = await deploymentManager.getKongMetrics(uploadId);
+      return response.json(metrics);
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to get metrics for ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to get metrics',
+        message: error.message,
+      });
+    }
+  });
+
+  router.post('/deploy/:uploadId/plugins/rate-limit', async (request, response) => {
+    const { uploadId } = request.params;
+    const { requestsPerMinute } = request.body;
+
+    if (!requestsPerMinute || requestsPerMinute <= 0) {
+      return response.status(400).json({
+        error: 'Invalid requestsPerMinute value',
+      });
+    }
+
+    try {
+      await deploymentManager.addRateLimiting(uploadId, requestsPerMinute);
+      return response.json({ success: true });
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to add rate limiting for ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to add rate limiting',
+        message: error.message,
+      });
+    }
+  });
+
+  router.post('/deploy/:uploadId/plugins/cors', async (request, response) => {
+    const { uploadId } = request.params;
+
+    try {
+      await deploymentManager.addCors(uploadId);
+      return response.json({ success: true });
+    } catch (error: any) {
+      logger.error(`[DEPLOY] Failed to add CORS for ${uploadId}`, { error });
+      return response.status(500).json({
+        error: 'Failed to add CORS',
         message: error.message,
       });
     }
