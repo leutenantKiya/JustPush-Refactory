@@ -12,7 +12,7 @@ export class GeminiAnalyzeService {
     
     if (apiKey) {
       this.genAI = new GoogleGenerativeAI(apiKey);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
       this.logger.info('GeminiAnalyzeService initialized with API key');
     } else {
       this.logger.warn('GeminiAnalyzeService initialized without API key - analyze functionality will be disabled');
@@ -96,18 +96,30 @@ OpenAPI Specification:`;
   private extractOpenApiSpec(generatedText: string): string {
     let spec = generatedText.trim();
     
+    spec = spec.replace(/^```json\n?/i, '');
     spec = spec.replace(/^```yaml\n?/i, '');
     spec = spec.replace(/^```\n?/, '');
     spec = spec.replace(/\n?```$/, '');
     
     spec = spec.trim();
 
-    if (!spec.startsWith('openapi:') && !spec.startsWith('swagger:')) {
-      this.logger.warn('Generated spec does not start with openapi: or swagger:, attempting to find it in text');
+    const jsonMatch = spec.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      spec = jsonMatch[0];
       
-      const match = spec.match(/(openapi|swagger):[\s\S]*/i);
-      if (match) {
-        spec = match[0];
+      try {
+        const parsed = JSON.parse(spec);
+        spec = JSON.stringify(parsed, null, 2);
+        this.logger.info('Successfully parsed and formatted OpenAPI JSON spec');
+      } catch (error) {
+        this.logger.warn('Generated spec is not valid JSON, returning as-is');
+      }
+    } else if (!spec.startsWith('openapi:') && !spec.startsWith('swagger:') && !spec.startsWith('{')) {
+      this.logger.warn('Generated spec format unclear, attempting to find OpenAPI content');
+      
+      const yamlMatch = spec.match(/(openapi|swagger):[\s\S]*/i);
+      if (yamlMatch) {
+        spec = yamlMatch[0];
       }
     }
 
@@ -173,7 +185,7 @@ OpenAPI Specification:`;
       .filter(f => f)
       .join(', ');
 
-    return `You are an expert API documentation specialist. Generate a complete OpenAPI 3.0 specification based on the following detected API endpoints from a project analysis.
+    return `You are an expert API documentation specialist. Generate a complete and professional OpenAPI 3.0 specification in JSON format based on the following detected API endpoints.
 
 Project Information:
 - Project Name: ${projectName}
@@ -185,23 +197,33 @@ Detected Endpoints:
 ${endpointsList}
 
 Instructions:
-1. Generate a complete and valid OpenAPI 3.0 specification in YAML format
-2. Create an appropriate info section with title, version, and description
-3. Define all detected endpoints under the paths section
-4. For each endpoint:
-   - Use the detected HTTP method and path
-   - Generate appropriate operation descriptions based on the path structure
-   - Create reasonable request/response schemas based on RESTful conventions
-   - Add parameter definitions for path/query parameters inferred from the URL
-5. Create reusable schemas in the components section
-6. Add proper tags for grouping related endpoints
-7. Include security schemes if authentication patterns are detected
-8. Use common REST patterns and conventions for schema generation
-9. Ensure all references and schemas are properly defined
-10. Make the specification production-ready and comprehensive
+1. Generate a complete OpenAPI 3.0 specification in JSON format (not YAML)
+2. Create an appropriate info section with:
+   - title: "${projectName} API"
+   - version: "1.0.0"
+   - description: Detailed description of the API's purpose and capabilities
+3. Define all detected endpoints under the paths section with:
+   - operationId: unique identifier for each operation
+   - summary: brief description
+   - description: detailed explanation of what the endpoint does
+   - tags: for grouping related endpoints
+   - parameters: path, query, and header parameters with descriptions and types
+   - requestBody: for POST/PUT/PATCH with proper schema and examples
+   - responses: comprehensive response definitions with schemas and examples
+4. Create reusable schemas in components.schemas section:
+   - Use proper JSON Schema definitions
+   - Include descriptions for each field
+   - Add examples for better understanding
+   - Use appropriate data types (string, number, boolean, array, object)
+5. Add security schemes in components.securitySchemes if authentication is detected
+6. Use RESTful conventions and best practices
+7. Ensure all $ref references are properly defined
+8. Include proper error response schemas (400, 401, 404, 500)
 
-Generate ONLY the OpenAPI YAML specification without any additional explanation or markdown formatting.
+IMPORTANT: Generate ONLY valid JSON format OpenAPI 3.0 specification. Do not include markdown formatting, code blocks, or any explanatory text.
 
-OpenAPI Specification:`;
+Output must start with { and end with }
+
+OpenAPI Specification (JSON):`;
   }
 }

@@ -45,13 +45,23 @@ export async function createRouter(
     logger.info('Created new FileExtractorService instance');
   }
   if (!sharedGitHubService) {
-    sharedGitHubService = new GitHubService(logger);
+    let githubToken: string | undefined;
+    try {
+      const githubConfigs = config.getOptionalConfigArray('integrations.github');
+      if (githubConfigs && githubConfigs.length > 0) {
+        githubToken = githubConfigs[0].getOptionalString('token');
+      }
+    } catch (error) {
+      logger.debug('Could not read GitHub token from config');
+    }
+    sharedGitHubService = new GitHubService(logger, '/tmp/backstage-git-clones', githubToken);
+    logger.info('Created new GitHubService instance');
   }
   if (!sharedApiDetector) {
     sharedApiDetector = new ApiDetectorService(logger, sharedFileExtractor);
   }
   
-  const geminiApiKey = config.getOptionalString('gemini.apiKey') || process.env.GEMINI_API_KEY;
+  const geminiApiKey = config.getOptionalString('gemini.apiKey');
   if (!sharedGeminiService) {
     sharedGeminiService = new GeminiAnalyzeService(logger, geminiApiKey);
   }

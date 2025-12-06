@@ -8,10 +8,12 @@ export class GitHubService {
   private logger: LoggerService;
   private cloneDir: string;
   private git: SimpleGit;
+  private githubToken?: string;
 
-  constructor(logger: LoggerService, cloneDir = '/tmp/backstage-git-clones') {
+  constructor(logger: LoggerService, cloneDir = '/tmp/backstage-git-clones', githubToken?: string) {
     this.logger = logger;
     this.cloneDir = cloneDir;
+    this.githubToken = githubToken;
     this.git = simpleGit();
     fs.ensureDirSync(this.cloneDir);
   }
@@ -27,7 +29,23 @@ export class GitHubService {
     try {
       this.logger.info(`Cloning repository: ${repoUrl} (branch: ${branch})`);
 
-      await this.git.clone(repoUrl, localPath, ['--depth', '1', '--branch', branch]);
+      let authenticatedUrl = repoUrl;
+      if (this.githubToken && repoUrl.includes('github.com')) {
+        const urlObj = new URL(repoUrl.replace('git@github.com:', 'https://github.com/'));
+        authenticatedUrl = `https://${this.githubToken}@${urlObj.host}${urlObj.pathname}`;
+      }
+
+      try {
+        await this.git.clone(authenticatedUrl, localPath, ['--depth', '1', '--branch', branch]);
+      } catch (branchError: any) {
+        if (branchError.message.includes('Remote branch') || branchError.message.includes('not found')) {
+          this.logger.warn(`Branch '${branch}' not found, trying default branch`);
+          await fs.remove(localPath).catch(() => {});
+          await this.git.clone(authenticatedUrl, localPath, ['--depth', '1']);
+        } else {
+          throw branchError;
+        }
+      }
 
       this.logger.info(`Repository cloned successfully to: ${localPath}`);
 
@@ -42,6 +60,17 @@ export class GitHubService {
       return { cloneId, localPath };
     } catch (error: any) {
       this.logger.error(`Failed to clone repository: ${error.message}`);
+      
+      await fs.remove(localPath).catch(() => {});
+      
+      if (error.message.includes('not found') || error.message.includes('404')) {
+        throw new Error('Repository not found. Please check the URL and make sure the repository exists.');
+      } else if (error.message.includes('Authentication failed') || error.message.includes('403')) {
+        throw new Error('Authentication failed. The repository may be private and require a GitHub token.');
+      } else if (error.message.includes('Could not resolve host')) {
+        throw new Error('Network error. Please check your internet connection.');
+      }
+      
       throw new Error(`GitHub clone failed: ${error.message}`);
     }
   }
