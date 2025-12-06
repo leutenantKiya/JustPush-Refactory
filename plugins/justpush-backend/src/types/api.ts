@@ -30,6 +30,11 @@ export interface AnalyzeResponse {
     byMethod: Record<string, number>;
     byPath: Record<string, number>;
   };
+  openApiSpec?: string;
+  geminiMetadata?: {
+    generatedAt: string;
+    model: string;
+  };
 }
 
 export interface Endpoint {
@@ -45,4 +50,28 @@ export interface GitHubImportRequest {
   repoUrl: string;
   branch?: string;
   path?: string;
+}
+
+export interface UploadMetadata {
+  uploadId: string;
+  extractedPath: string;
+  createdAt: Date;
+  lastAccessed: Date;
+}
+
+// Gemini
+
+export interface AnalyzeApiRequest {
+  apiUrl: string;
+  method?: string;
+  headers?: Record<string, string>;
+}
+
+export interface AnalyzeApiResponse {
+  openApiSpec: string;
+  metadata: {
+    analyzedUrl: string;
+    generatedAt: string;
+    model: string;
+  };
 }

@@ -25,6 +25,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextareaAutosize,
 } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
 import { Alert } from '@material-ui/lab';
@@ -33,8 +34,9 @@ import CloudUploadIcon from '@material-ui/icons/CloudUpload';
 import GitHubIcon from '@material-ui/icons/GitHub';
 import FolderIcon from '@material-ui/icons/Folder';
 import CodeIcon from '@material-ui/icons/Code';
+import GetAppIcon from '@material-ui/icons/GetApp';
 import { useApi, fetchApiRef, discoveryApiRef } from '@backstage/core-plugin-api';
-import { DetectedPath, AnalyzeResponse } from '@internal/backstage-plugin-api-importer-backend/src/types/api';
+import type { DetectedPath, AnalyzeResponse } from '@internal/backstage-plugin-justpush-backend';
 
 const useStyles = makeStyles(theme => ({
   paper: {
@@ -66,6 +68,16 @@ const useStyles = makeStyles(theme => ({
   methodChip: {
     marginRight: theme.spacing(1),
     fontWeight: 'bold',
+  },
+  specTextarea: {
+    width: '100%',
+    minHeight: 400,
+    fontFamily: 'monospace',
+    fontSize: 12,
+    padding: theme.spacing(2),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.background.default,
   },
 }));
 
@@ -104,7 +116,7 @@ export const ImporterComponent = () => {
     setError(null);
 
     try {
-      const baseUrl = await discoveryApi.getBaseUrl('api-importer');
+      const baseUrl = await discoveryApi.getBaseUrl('justpush');
       const formData = new FormData();
       formData.append('file', file);
 
@@ -138,7 +150,7 @@ export const ImporterComponent = () => {
     setError(null);
 
     try {
-      const baseUrl = await discoveryApi.getBaseUrl('api-importer');
+      const baseUrl = await discoveryApi.getBaseUrl('justpush');
       const response = await fetchApi.fetch(`${baseUrl}/import/github`, {
         method: 'POST',
         headers: {
@@ -176,13 +188,16 @@ export const ImporterComponent = () => {
     setError(null);
 
     try {
-      const baseUrl = await discoveryApi.getBaseUrl('api-importer');
+      const baseUrl = await discoveryApi.getBaseUrl('justpush');
+      console.log(`Analyzing project with uploadId: ${uploadId}, URL: ${baseUrl}/analyze/${uploadId}`);
       const response = await fetchApi.fetch(`${baseUrl}/analyze/${uploadId}`, {
         method: 'POST',
       });
 
       if (!response.ok) {
-        throw new Error(`Analysis failed: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || response.statusText;
+        throw new Error(`Analysis failed: ${errorMessage}`);
       }
 
       const data = await response.json();
@@ -208,10 +223,11 @@ export const ImporterComponent = () => {
   return (
     <Box p={3}>
       <Typography variant="h4" gutterBottom>
-        API Importer & Analyzer
+        JustPush - API Normalization Tool
       </Typography>
       <Typography variant="body2" color="textSecondary" paragraph>
-        Upload ZIP file or import from GitHub to automatically detect and analyze API endpoints
+        Upload ZIP file or import from GitHub to automatically detect and analyze API endpoints.
+        OpenAPI specifications are automatically generated using Gemini AI.
       </Typography>
 
       <Paper className={classes.paper}>
@@ -456,6 +472,50 @@ export const ImporterComponent = () => {
             <Typography variant="body2" color="textSecondary" style={{ marginTop: 16, textAlign: 'center' }}>
               Showing first 100 of {analyzeResult.endpoints.length} endpoints
             </Typography>
+          )}
+
+          {analyzeResult.openApiSpec && (
+            <Box mt={4}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">
+                  Generated OpenAPI Specification
+                </Typography>
+                <Box>
+                  {analyzeResult.geminiMetadata && (
+                    <Chip 
+                      label={`Generated with ${analyzeResult.geminiMetadata.model}`}
+                      size="small"
+                      color="primary"
+                      style={{ marginRight: 8 }}
+                    />
+                  )}
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    startIcon={<GetAppIcon />}
+                    onClick={() => {
+                      const blob = new Blob([analyzeResult.openApiSpec!], { type: 'text/yaml' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'openapi-spec.yaml';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download YAML
+                  </Button>
+                </Box>
+              </Box>
+              <TextareaAutosize
+                className={classes.specTextarea}
+                value={analyzeResult.openApiSpec}
+                readOnly
+                placeholder="OpenAPI specification..."
+              />
+            </Box>
           )}
         </Paper>
       )}

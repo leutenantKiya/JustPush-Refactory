@@ -1,5 +1,5 @@
 {
-  "name": "@internal/backstage-plugin-api-importer-backend",
+  "name": "@internal/backstage-plugin-justpush-backend",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -12,7 +12,7 @@
   },
   "backstage": {
     "role": "backend-plugin",
-    "pluginId": "api-importer"
+    "pluginId": "justpush"
   },
   "scripts": {
     "start": "backstage-cli package start",
@@ -27,9 +27,11 @@
     "@backstage/backend-defaults": "^0.13.1",
     "@backstage/backend-plugin-api": "^1.5.0",
     "@backstage/catalog-client": "^1.12.1",
+    "@backstage/config": "^1.3.6",
     "@backstage/errors": "^1.2.7",
     "@backstage/plugin-catalog-node": "^1.20.0",
     "@backstage/types": "^1.2.2",
+    "@google/generative-ai": "^0.24.1",
     "@types/adm-zip": "^0.5.7",
     "@types/fs-extra": "^11.0.4",
     "@types/multer": "^2.0.0",

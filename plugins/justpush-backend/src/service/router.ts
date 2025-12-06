@@ -1,27 +1,65 @@
 import express from 'express';
 import Router from 'express-promise-router';
-import { LoggerService } from '@backstage/backend-plugin-api';
+import { LoggerService, HttpAuthService } from '@backstage/backend-plugin-api';
+import { Config } from '@backstage/config';
 import multer from 'multer';
 import { FileExtractorService } from './FileExtractorService';
 import { GitHubService } from './GitHubService';
 import { ApiDetectorService } from './ApiDetectorService';
+import { GeminiAnalyzeService } from './GeminiAnalyzeService';
 import { AnalyzeResponse, GitHubImportRequest, UploadResponse } from '../types/api';
 
 export interface RouterOptions {
   logger: LoggerService;
+  config: Config;
+  httpAuth: HttpAuthService;
 }
+
+let sharedFileExtractor: FileExtractorService | null = null;
+let sharedGitHubService: GitHubService | null = null;
+let sharedApiDetector: ApiDetectorService | null = null;
+let sharedGeminiService: GeminiAnalyzeService | null = null;
 
 export async function createRouter(
   options: RouterOptions,
 ): Promise<express.Router> {
-  const { logger } = options;
+  const { logger, config, httpAuth } = options;
 
   const router = Router();
   router.use(express.json());
 
-  const fileExtractor = new FileExtractorService(logger);
-  const githubService = new GitHubService(logger);
-  const apiDetector = new ApiDetectorService(logger, fileExtractor);
+  router.use(async (req, _, next) => {
+    try {
+      await httpAuth.credentials(req, { 
+        allow: ['user', 'service'],
+        allowLimitedAccess: true 
+      });
+    } catch (error) {
+      logger.debug(`No credentials found, allowing limited access`);
+    }
+    next();
+  });
+
+  if (!sharedFileExtractor) {
+    sharedFileExtractor = new FileExtractorService(logger);
+    logger.info('Created new FileExtractorService instance');
+  }
+  if (!sharedGitHubService) {
+    sharedGitHubService = new GitHubService(logger);
+  }
+  if (!sharedApiDetector) {
+    sharedApiDetector = new ApiDetectorService(logger, sharedFileExtractor);
+  }
+  
+  const geminiApiKey = config.getOptionalString('gemini.apiKey') || process.env.GEMINI_API_KEY;
+  if (!sharedGeminiService) {
+    sharedGeminiService = new GeminiAnalyzeService(logger, geminiApiKey);
+  }
+
+  const fileExtractor = sharedFileExtractor;
+  const githubService = sharedGitHubService;
+  const apiDetector = sharedApiDetector;
+  const geminiService = sharedGeminiService;
 
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -66,7 +104,12 @@ export async function createRouter(
         totalFiles: allFiles.length,
       };
 
-      logger.info(`Upload processed: ${uploadId}, found ${detectedPaths.length} API paths`);
+      logger.info(`Upload processed: ${uploadId}, found ${detectedPaths.length} API paths, path: ${extractedPath}`);
+      
+      const fs = await import('fs-extra');
+      const stillExists = await fs.pathExists(extractedPath);
+      logger.info(`Directory verification: ${extractedPath} exists = ${stillExists}`);
+      
       return response.json(uploadResponse);
     } catch (error: any) {
       logger.error('Upload processing failed', error);
@@ -81,9 +124,32 @@ export async function createRouter(
     const { uploadId } = request.params;
     const extractedPath = fileExtractor.getUploadPath(uploadId);
 
-    logger.info(`Analyzing project: ${uploadId}`);
+    logger.info(`[ANALYZE] Starting analysis for uploadId: ${uploadId}`);
+    logger.info(`[ANALYZE] Expected path: ${extractedPath}`);
 
     try {
+      const fs = await import('fs-extra');
+      const dirExists = await fs.pathExists(extractedPath);
+      
+      logger.info(`[ANALYZE] Directory exists check: ${dirExists}`);
+      
+      if (!dirExists) {
+        logger.error(`[ANALYZE] Directory not found: ${extractedPath}`);
+        
+        const uploadsDir = '/tmp/backstage-uploads';
+        try {
+          const dirs = await fs.readdir(uploadsDir);
+          logger.info(`[ANALYZE] Available uploads in ${uploadsDir}: ${dirs.join(', ')}`);
+        } catch (e) {
+          logger.warn(`[ANALYZE] Could not list uploads directory`);
+        }
+        
+        return response.status(404).json({
+          error: 'Project not found',
+          message: 'The uploaded project directory no longer exists. Please re-upload your project.',
+        });
+      }
+
       const detectedPaths = await apiDetector.detectApiPaths(extractedPath);
 
       const endpoints = await apiDetector.analyzeEndpoints(extractedPath, detectedPaths);
@@ -107,6 +173,27 @@ export async function createRouter(
           byPath,
         },
       };
+
+      if (endpoints.length > 0 && geminiService) {
+        try {
+          logger.info('Generating OpenAPI spec with Gemini...');
+          const openApiSpec = await geminiService.generateOpenApiFromEndpoints(
+            endpoints,
+            detectedPaths,
+            `API Project ${uploadId}`,
+          );
+          
+          analyzeResponse.openApiSpec = openApiSpec;
+          analyzeResponse.geminiMetadata = {
+            generatedAt: new Date().toISOString(),
+            model: 'gemini-2.5-flash',
+          };
+          
+          logger.info('OpenAPI spec generated successfully');
+        } catch (geminiError: any) {
+          logger.warn(`Failed to generate OpenAPI spec with Gemini: ${geminiError.message}`);
+        }
+      }
 
       logger.info(`Analysis complete: ${endpoints.length} endpoints found`);
       return response.json(analyzeResponse);
@@ -139,6 +226,8 @@ export async function createRouter(
         branch,
         targetPath,
       );
+
+      fileExtractor.registerUpload(cloneId, localPath);
 
       const detectedPaths = await apiDetector.detectApiPaths(localPath);
 
@@ -179,7 +268,36 @@ export async function createRouter(
     }
   });
 
+  router.post('/analyze-api', async (request, response) => {
+    const { apiUrl, method, headers } = request.body;
+
+    if (!apiUrl) {
+      return response.status(400).json({ error: 'apiUrl is required' });
+    }
+
+    logger.info(`Analyzing API with Gemini: ${apiUrl}`);
+
+    try {
+      const result = await geminiService.analyzeApi({
+        apiUrl,
+        method,
+        headers,
+      });
+
+      logger.info(`API analysis complete for: ${apiUrl}`);
+      return response.json(result);
+    } catch (error: any) {
+      logger.error('Gemini API analysis failed', error);
+      return response.status(500).json({
+        error: 'Failed to analyze API',
+        message: error.message,
+      });
+    }
+  });
+
   router.get('/stats', async (_, response) => {
+    const geminiConfigured = await geminiService.testConnection();
+    
     response.json({
       message: 'API Importer Statistics',
       supportedFormats: ['ZIP'],
@@ -192,6 +310,9 @@ export async function createRouter(
         'NestJS',
         'Hapi',
       ],
+      features: {
+        geminiAnalyzer: geminiConfigured,
+      },
     });
   });
 

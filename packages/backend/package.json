@@ -43,7 +43,7 @@
     "@backstage/plugin-search-backend-node": "^1.3.17",
     "@backstage/plugin-signals-backend": "^0.3.10",
     "@backstage/plugin-techdocs-backend": "^2.1.2",
-    "@internal/backstage-plugin-api-importer-backend": "workspace:^",
+    "@internal/backstage-plugin-justpush-backend": "workspace:^",
     "@types/adm-zip": "^0.5.7",
     "@types/multer": "^2.0.0",
     "adm-zip": "^0.5.16",

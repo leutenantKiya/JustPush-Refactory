@@ -44,8 +44,8 @@ integrations:
     #   token: ${GHE_TOKEN}
 
 proxy:
-  '/api-importer':
-    target: http://localhost:7007/api/api-importer
+  '/justpush':
+    target: http://localhost:7007/api/justpush
     changeOrigin: true
 
 # Reference documentation http://backstage.io/docs/features/techdocs/configuration
@@ -63,8 +63,7 @@ auth:
   # see https://backstage.io/docs/auth/ to learn about auth providers
   providers:
     # See https://backstage.io/docs/auth/guest/provider
-    guest: 
-      dangerouslyAllowSignInWithoutUserInCatalog: true
+    guest: {}
 
 scaffolder:
   # see https://backstage.io/docs/features/software-templates/configuration for software template options
@@ -74,7 +73,7 @@ catalog:
     entityFilename: catalog-info.yaml
     pullRequestBranchName: backstage-integration
   rules:
-    - allow: [Component, System, API, Resource, Location]
+    - allow: [Component, System, API, Resource, Location, User, Group, Template]
   locations:
     # Local example data, file locations are relative to the backend process, typically `packages/backend`
     - type: file
@@ -117,4 +116,10 @@ kubernetes:
 # see https://backstage.io/docs/permissions/getting-started for more on the permission framework
 permission:
   # setting this to `false` will disable permissions
-  enabled: true
+  enabled: false
+
+# Gemini AI configuration for API analysis
+# Get your API key from: https://makersuite.google.com/app/apikey
+gemini:
+  apiKey: AIzaSyDjn2RqKsi7sLEjE7KVJr1VovptkBBJKfM
+  # apiKey: ${GEMINI_API_KEY}

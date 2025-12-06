@@ -9,18 +9,22 @@ import { createRouter } from './service/router';
  *
  * @public
  */
-export const apiImporterPlugin = createBackendPlugin({
-  pluginId: 'api-importer',
+export const justPushPlugin = createBackendPlugin({
+  pluginId: 'justpush',
   register(env) {
     env.registerInit({
       deps: {
         httpRouter: coreServices.httpRouter,
         logger: coreServices.logger,
+        config: coreServices.rootConfig,
+        httpAuth: coreServices.httpAuth,
       },
-      async init({ httpRouter, logger }) {
+      async init({ httpRouter, logger, config, httpAuth }) {
         httpRouter.use(
           await createRouter({
             logger,
+            config,
+            httpAuth,
           }),
         );
       },

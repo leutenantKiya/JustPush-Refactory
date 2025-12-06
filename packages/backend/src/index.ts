@@ -63,8 +63,8 @@ backend.add(import('@backstage/plugin-kubernetes-backend'));
 backend.add(import('@backstage/plugin-notifications-backend'));
 backend.add(import('@backstage/plugin-signals-backend'));
 
-// adding api-importer plugin
-backend.add(import('@internal/backstage-plugin-api-importer-backend'));
+// JustPush plugins & others
+backend.add(import('@internal/backstage-plugin-justpush-backend'));
 backend.add(import('@backstage/plugin-catalog-backend-module-github-org'));
 
 backend.start();

@@ -5,16 +5,16 @@ import {
 
 import { rootRouteRef } from './routes';
 
-export const apiImporterPlugin = createPlugin({
-  id: 'api-importer',
+export const justPushPlugin = createPlugin({
+  id: 'justpush',
   routes: {
     root: rootRouteRef,
   },
 });
 
-export const ApiImporterPage = apiImporterPlugin.provide(
+export const JustPushPage = justPushPlugin.provide(
   createRoutableExtension({
-    name: 'ApiImporterPage',
+    name: 'JustPushPage',
     component: () =>
       import('./components/ImporterComponent/ImporterComponent').then(m => m.ImporterComponent),
     mountPoint: rootRouteRef,

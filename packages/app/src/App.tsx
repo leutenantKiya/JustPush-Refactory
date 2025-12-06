@@ -37,7 +37,7 @@ import { RequirePermission } from '@backstage/plugin-permission-react';
 import { catalogEntityCreatePermission } from '@backstage/plugin-catalog-common/alpha';
 import { NotificationsPage } from '@backstage/plugin-notifications';
 import { SignalsDisplay } from '@backstage/plugin-signals';
-import { ApiImporterPage } from '@internal/backstage-plugin-api-importer';
+import { JustPushPage } from '@internal/backstage-plugin-justpush';
 
 const app = createApp({
   apis,
@@ -98,7 +98,7 @@ const routes = (
     <Route path="/settings" element={<UserSettingsPage />} />
     <Route path="/catalog-graph" element={<CatalogGraphPage />} />
     <Route path="/notifications" element={<NotificationsPage />} />
-    <Route path="/api-importer" element={<ApiImporterPage />} />
+    <Route path="/justpush" element={<JustPushPage />} />
   </FlatRoutes>
 );
 

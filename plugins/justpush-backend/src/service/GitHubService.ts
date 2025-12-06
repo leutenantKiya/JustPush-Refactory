@@ -35,9 +35,8 @@ export class GitHubService {
         const fullTargetPath = path.join(localPath, targetPath);
         if (await fs.pathExists(fullTargetPath)) {
           return { cloneId, localPath: fullTargetPath };
-        } else {
-          this.logger.warn(`Target path ${targetPath} not found, using root`);
         }
+        this.logger.warn(`Target path ${targetPath} not found, using root`);
       }
 
       return { cloneId, localPath };

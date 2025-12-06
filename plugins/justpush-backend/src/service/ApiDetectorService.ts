@@ -49,6 +49,13 @@ export class ApiDetectorService {
 
     this.logger.info(`Detecting API paths in: ${rootPath}`);
 
+    const rootExists = await this.pathExists(rootPath);
+    if (!rootExists) {
+      const error = new Error(`Root path does not exist: ${rootPath}`);
+      this.logger.error(error.message);
+      throw error;
+    }
+
     for (const pattern of this.apiPathPatterns) {
       const fullPath = path.join(rootPath, pattern);
       const exists = await this.pathExists(fullPath);
@@ -100,6 +107,13 @@ export class ApiDetectorService {
 
   async analyzeEndpoints(rootPath: string, detectedPaths: DetectedPath[]): Promise<Endpoint[]> {
     const endpoints: Endpoint[] = [];
+
+    const rootExists = await this.pathExists(rootPath);
+    if (!rootExists) {
+      const error = new Error(`Root path does not exist: ${rootPath}`);
+      this.logger.error(error.message);
+      throw error;
+    }
 
     for (const detected of detectedPaths) {
       for (const relativeFile of detected.files) {
