@@ -192,6 +192,9 @@ export const ImporterComponent = () => {
   const [detectedPaths, setDetectedPaths] = useState<DetectedPath[]>([]);
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<Array<{ path: string; method: string; existingRoute: string }>>([]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -330,6 +333,83 @@ export const ImporterComponent = () => {
       setAnalyzing(false);
       setAnalysisProgress(0);
       setAnalysisStep('');
+    }
+  };
+
+  const handleRegisterToKong = async () => {
+    if (!uploadId || !analyzeResult || !analyzeResult.openApiSpec) {
+      setError('No OpenAPI specification available');
+      return;
+    }
+
+    setRegistering(true);
+    setError(null);
+    setRegisterSuccess(null);
+
+    try {
+      const baseUrl = await discoveryApi.getBaseUrl('justpush');
+      const serviceName = `api-${uploadId}`;
+      const serviceUrl = domain && domain.trim() !== '' ? domain : 'https://api.example.com';
+
+      const conflictResponse = await fetchApi.fetch(`${baseUrl}/check-conflicts/${uploadId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          openApiSpec: analyzeResult.openApiSpec,
+        }),
+      });
+
+      if (!conflictResponse.ok) {
+        throw new Error('Failed to check for conflicts');
+      }
+
+      const conflictData = await conflictResponse.json();
+
+      if (conflictData.hasConflicts) {
+        setConflicts(conflictData.conflicts);
+        
+        const conflictList = conflictData.conflicts
+          .map((c: any) => `${c.method} ${c.path} (conflicts with ${c.existingRoute})`)
+          .join('\n');
+        
+        const proceed = window.confirm(
+          `Warning: Found ${conflictData.conflicts.length} conflicting route(s):\n\n${conflictList}\n\nDo you want to continue anyway?`
+        );
+
+        if (!proceed) {
+          setRegistering(false);
+          return;
+        }
+      } else {
+        setConflicts([]);
+      }
+
+      const response = await fetchApi.fetch(`${baseUrl}/register-kong/${uploadId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serviceName,
+          serviceUrl,
+          openApiSpec: analyzeResult.openApiSpec,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || response.statusText;
+        throw new Error(`Kong registration failed: ${errorMessage}`);
+      }
+
+      const data = await response.json();
+      setRegisterSuccess(`Successfully registered ${data.routeCount} routes to Kong Gateway`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -536,12 +616,21 @@ export const ImporterComponent = () => {
                   <TableCell style={{ color: '#c0c0c0', backgroundColor: '#242424', fontWeight: 600, fontSize: '0.8125rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Framework</TableCell>
                   <TableCell align="center" style={{ color: '#c0c0c0', backgroundColor: '#242424', fontWeight: 600, fontSize: '0.8125rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confidence</TableCell>
                   <TableCell align="center" style={{ color: '#c0c0c0', backgroundColor: '#242424', fontWeight: 600, fontSize: '0.8125rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Files</TableCell>
+                  <TableCell align="center" style={{ color: '#c0c0c0', backgroundColor: '#242424', fontWeight: 600, fontSize: '0.8125rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {detectedPaths.map((detected, index) => (
-                  <TableRow key={index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <TableCell style={{ backgroundColor: '#1e1e1e', padding: '12px 16px' }}>
+                {detectedPaths.map((detected, index) => {
+                  const hasConflict = conflicts.some(
+                    c => c.path === detected.path && c.method === detected.type
+                  );
+                  const conflictInfo = conflicts.find(
+                    c => c.path === detected.path && c.method === detected.type
+                  );
+
+                  return (
+                  <TableRow key={index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', backgroundColor: hasConflict ? 'rgba(244, 67, 54, 0.08)' : '#1e1e1e' }}>
+                    <TableCell style={{ padding: '12px 16px' }}>
                       <Box display="flex" alignItems="center">
                         <CodeIcon style={{ marginRight: 8, fontSize: 16, color: '#9a9a9a' }} />
                         <code style={{ fontSize: 12.5, color: '#e8e8e8', backgroundColor: '#2a2a2a', padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
@@ -549,7 +638,7 @@ export const ImporterComponent = () => {
                         </code>
                       </Box>
                     </TableCell>
-                    <TableCell style={{ backgroundColor: '#1e1e1e', padding: '12px 16px' }}>
+                    <TableCell style={{ padding: '12px 16px' }}>
                       <Chip 
                         label={detected.type} 
                         size="small" 
@@ -557,7 +646,7 @@ export const ImporterComponent = () => {
                         style={{ fontSize: '0.75rem' }}
                       />
                     </TableCell>
-                    <TableCell style={{ backgroundColor: '#1e1e1e', padding: '12px 16px' }}>
+                    <TableCell style={{ padding: '12px 16px' }}>
                       {detected.framework ? (
                         <Chip 
                           label={detected.framework} 
@@ -594,13 +683,31 @@ export const ImporterComponent = () => {
                         </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell align="center" style={{ backgroundColor: '#1e1e1e', padding: '12px 16px' }}>
+                    <TableCell align="center" style={{ padding: '12px 16px' }}>
                       <Typography variant="body2" style={{ color: '#d0d0d0', fontSize: '0.8125rem' }}>
                         {detected.files.length}
                       </Typography>
                     </TableCell>
+                    <TableCell align="center" style={{ padding: '12px 16px' }}>
+                      {hasConflict ? (
+                        <Chip 
+                          label={`Conflicts with ${conflictInfo?.existingRoute}`}
+                          size="small" 
+                          style={{ 
+                            backgroundColor: 'rgba(244, 67, 54, 0.2)', 
+                            color: '#f44336',
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            border: '1px solid rgba(244, 67, 54, 0.5)'
+                          }}
+                        />
+                      ) : (
+                        <Typography variant="caption" style={{ color: '#6e6e6e' }}>-</Typography>
+                      )}
+                    </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -699,12 +806,16 @@ export const ImporterComponent = () => {
                   size="large"
                   className={classes.button}
                   style={{ fontSize: '0.9375rem' }}
-                  onClick={() => {
-                    console.log('Register to Kong API clicked');
-                  }}
+                  onClick={handleRegisterToKong}
+                  disabled={registering || !analyzeResult?.openApiSpec}
                 >
-                  Register to Kong API
+                  {registering ? <CircularProgress size={20} color="inherit" /> : 'Register to Kong API'}
                 </Button>
+                {registerSuccess && (
+                  <Alert severity="success" style={{ marginTop: 12 }}>
+                    {registerSuccess}
+                  </Alert>
+                )}
               </Box>
             </Grid>
 

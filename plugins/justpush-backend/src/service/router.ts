@@ -7,6 +7,7 @@ import { FileExtractorService } from './FileExtractorService';
 import { GitHubService } from './GitHubService';
 import { ApiDetectorService } from './ApiDetectorService';
 import { GeminiAnalyzeService } from './GeminiAnalyzeService';
+import { KongService } from './KongService';
 import { AnalyzeResponse, GitHubImportRequest, UploadResponse } from '../types/api';
 
 export interface RouterOptions {
@@ -18,6 +19,7 @@ let sharedFileExtractor: FileExtractorService | null = null;
 let sharedGitHubService: GitHubService | null = null;
 let sharedApiDetector: ApiDetectorService | null = null;
 let sharedGeminiService: GeminiAnalyzeService | null = null;
+let sharedKongService: KongService | null = null;
 
 export async function createRouter(
   options: RouterOptions,
@@ -42,11 +44,20 @@ export async function createRouter(
     const geminiApiKey = config.getOptionalString('gemini.apiKey');
     sharedGeminiService = new GeminiAnalyzeService(logger, geminiApiKey);
   }
+  if (!sharedKongService) {
+    const kongConfig = {
+      adminUrl: config.getOptionalString('kong.adminUrl') || 'http://localhost:8001',
+      adminToken: config.getOptionalString('kong.adminToken'),
+      gatewayUrl: config.getOptionalString('kong.gatewayUrl') || 'http://localhost:8000',
+    };
+    sharedKongService = new KongService(logger, kongConfig);
+  }
 
   const fileExtractor = sharedFileExtractor;
   const githubService = sharedGitHubService;
   const apiDetector = sharedApiDetector;
   const geminiService = sharedGeminiService;
+  const kongService = sharedKongService;
 
   const upload = multer({
     storage: multer.memoryStorage(),
@@ -168,6 +179,94 @@ export async function createRouter(
       logger.error('Analysis failed', error);
       return response.status(500).json({
         error: 'Failed to analyze project',
+        message: error.message,
+      });
+    }
+  });
+
+  router.post('/check-conflicts/:uploadId', async (request, response) => {
+    const { uploadId } = request.params;
+    const { openApiSpec } = request.body as { openApiSpec: string };
+
+    if (!openApiSpec) {
+      return response.status(400).json({
+        error: 'Missing required field',
+        message: 'openApiSpec is required',
+      });
+    }
+
+    logger.info(`Checking conflicts for uploadId: ${uploadId}`);
+
+    try {
+      let parsedSpec;
+      try {
+        parsedSpec = JSON.parse(openApiSpec);
+      } catch (parseError) {
+        throw new Error('Invalid OpenAPI spec: must be valid JSON');
+      }
+
+      const result = await kongService.checkConflicts(uploadId, parsedSpec);
+
+      return response.json({
+        hasConflicts: result.hasConflicts,
+        conflicts: result.conflicts,
+        message: result.hasConflicts
+          ? `Found ${result.conflicts.length} conflicting route(s)`
+          : 'No conflicts found',
+      });
+    } catch (error: any) {
+      logger.error('Conflict check failed', error);
+      return response.status(500).json({
+        error: 'Failed to check conflicts',
+        message: error.message,
+      });
+    }
+  });
+
+  router.post('/register-kong/:uploadId', async (request, response) => {
+    const { uploadId } = request.params;
+    const { serviceName, serviceUrl, openApiSpec } = request.body as {
+      serviceName: string;
+      serviceUrl: string;
+      openApiSpec: string;
+    };
+
+    if (!serviceName || !serviceUrl || !openApiSpec) {
+      return response.status(400).json({
+        error: 'Missing required fields',
+        message: 'serviceName, serviceUrl, and openApiSpec are required',
+      });
+    }
+
+    logger.info(`Registering API to Kong for uploadId: ${uploadId}`);
+
+    try {
+      let parsedSpec;
+      try {
+        parsedSpec = JSON.parse(openApiSpec);
+      } catch (parseError) {
+        throw new Error('Invalid OpenAPI spec: must be valid JSON');
+      }
+
+      const result = await kongService.registerApi(
+        uploadId,
+        serviceUrl,
+        parsedSpec,
+      );
+
+      logger.info(`Kong registration successful: ${result.serviceId}`);
+      return response.json({
+        success: true,
+        serviceId: result.serviceId,
+        serviceName: serviceName,
+        routeCount: result.routeIds.length,
+        routeIds: result.routeIds,
+        message: `Successfully registered ${result.routeIds.length} routes to Kong Gateway`,
+      });
+    } catch (error: any) {
+      logger.error('Kong registration failed', error);
+      return response.status(500).json({
+        error: 'Failed to register to Kong Gateway',
         message: error.message,
       });
     }

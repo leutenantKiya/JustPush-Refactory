@@ -113,6 +113,50 @@ export class KongService {
     }
   }
 
+  async checkConflicts(
+    uploadId: string,
+    openApiSpec: OpenApiSpec,
+  ): Promise<{ hasConflicts: boolean; conflicts: Array<{ path: string; method: string; existingRoute: string }> }> {
+    this.logger.info(`Checking for route conflicts for ${uploadId}`);
+    
+    const conflicts: Array<{ path: string; method: string; existingRoute: string }> = [];
+    const routes = this.generateRoutesFromOpenApi(uploadId, openApiSpec);
+
+    try {
+      const response = await this.client.get('/routes');
+      const existingRoutes = response.data.data || [];
+
+      for (const route of routes) {
+        for (const path of route.paths) {
+          for (const method of route.methods || []) {
+            const conflict = existingRoutes.find((existing: any) => {
+              const pathMatch = existing.paths?.some((p: string) => p === path);
+              const methodMatch = !existing.methods || existing.methods.length === 0 || existing.methods.includes(method);
+              return pathMatch && methodMatch;
+            });
+
+            if (conflict) {
+              conflicts.push({
+                path,
+                method,
+                existingRoute: conflict.name || conflict.id,
+              });
+            }
+          }
+        }
+      }
+
+      this.logger.info(`Conflict check complete: found ${conflicts.length} conflicts`);
+      return {
+        hasConflicts: conflicts.length > 0,
+        conflicts,
+      };
+    } catch (error: any) {
+      this.logger.error('Failed to check conflicts', { error });
+      throw new Error(`Failed to check conflicts: ${error.message}`);
+    }
+  }
+
   private async getServiceByName(name: string): Promise<{ id: string } | null> {
     try {
       const response = await this.client.get(`/services/${name}`);
