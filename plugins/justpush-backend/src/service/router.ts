@@ -115,7 +115,7 @@ export async function createRouter(
 
   router.post('/analyze/:uploadId', async (request, response) => {
     const { uploadId } = request.params;
-    const { baseUrl } = request.body as { baseUrl?: string };
+    const { baseUrl, projectName } = request.body as { baseUrl?: string; projectName?: string };
     const extractedPath = fileExtractor.getUploadPath(uploadId);
 
     try {
@@ -154,11 +154,53 @@ export async function createRouter(
       if (endpoints.length > 0 && geminiService) {
         try {
           logger.info('Generating OpenAPI spec...');
+          
+          let existingRoutes: Array<{ path: string; methods: string[]; name: string }> = [];
+          if (kongService) {
+            try {
+              existingRoutes = await kongService.getExistingRoutes();
+              logger.info(`Found ${existingRoutes.length} existing routes in Kong`);
+            } catch (kongError: any) {
+              logger.warn(`Failed to fetch existing Kong routes: ${kongError.message}`);
+            }
+          }
+          
+          const shortId = uploadId.substring(0, 8);
+          const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          
+          let generatedProjectName: string;
+          if (projectName && projectName.trim() !== '') {
+            generatedProjectName = projectName
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .substring(0, 50);
+          } else {
+            const frameworks = detectedPaths
+              .map(p => p.framework)
+              .filter(f => f);
+            const uniqueFrameworks = [...new Set(frameworks)];
+            
+            const pathSegments = detectedPaths
+              .flatMap(p => p.path.split('/'))
+              .filter(seg => seg && seg !== 'api' && seg.length > 2);
+            const commonSegment = pathSegments[0];
+            
+            if (commonSegment && commonSegment.length > 2) {
+              generatedProjectName = `${commonSegment}-api-${shortId}`;
+            } else if (uniqueFrameworks.length > 0) {
+              generatedProjectName = `${uniqueFrameworks[0]!.toLowerCase()}-api-${shortId}`;
+            } else {
+              generatedProjectName = `api-${timestamp}-${shortId}`;
+            }
+          }
+          
           const openApiSpec = await geminiService.generateOpenApiFromEndpoints(
             endpoints,
             detectedPaths,
-            `API Project ${uploadId}`,
+            generatedProjectName,
             baseUrl,
+            existingRoutes,
           );
           
           analyzeResponse.openApiSpec = openApiSpec;
@@ -225,10 +267,11 @@ export async function createRouter(
 
   router.post('/register-kong/:uploadId', async (request, response) => {
     const { uploadId } = request.params;
-    const { serviceName, serviceUrl, openApiSpec } = request.body as {
+    const { serviceName, serviceUrl, openApiSpec, projectName } = request.body as {
       serviceName: string;
       serviceUrl: string;
       openApiSpec: string;
+      projectName?: string;
     };
 
     if (!serviceName || !serviceUrl || !openApiSpec) {
@@ -248,8 +291,30 @@ export async function createRouter(
         throw new Error('Invalid OpenAPI spec: must be valid JSON');
       }
 
+      let kongServiceName: string;
+      if (projectName && projectName.trim() !== '') {
+        kongServiceName = projectName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .substring(0, 50);
+      } else {
+        const specTitle = parsedSpec.info?.title;
+        if (specTitle && specTitle.length > 3 && !specTitle.startsWith('api-')) {
+          kongServiceName = specTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .substring(0, 50);
+        } else {
+          const shortId = uploadId.substring(0, 8);
+          const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          kongServiceName = `api-${timestamp}-${shortId}`;
+        }
+      }
+
       const result = await kongService.registerApi(
-        uploadId,
+        kongServiceName,
         serviceUrl,
         parsedSpec,
       );

@@ -25,18 +25,16 @@ export class KongService {
   }
 
   async registerApi(
-    uploadId: string,
+    serviceIdentifier: string,
     serviceUrl: string,
     openApiSpec: OpenApiSpec,
     plugins?: KongPluginConfig[],
   ): Promise<KongRegistrationResult> {
-    this.logger.info(`Registering API for ${uploadId} with Kong Gateway`);
+    this.logger.info(`Registering API for ${serviceIdentifier} with Kong Gateway`);
 
     try {
-      const serviceName = `justpush-${uploadId}`;
-
       const serviceConfig: KongServiceConfig = {
-        name: serviceName,
+        name: serviceIdentifier,
         url: serviceUrl,
         retries: 5,
         connectTimeout: 60000,
@@ -46,7 +44,7 @@ export class KongService {
 
       const serviceId = await this.createService(serviceConfig);
 
-      const routes = this.generateRoutesFromOpenApi(uploadId, openApiSpec);
+      const routes = this.generateRoutesFromOpenApi(serviceIdentifier, openApiSpec);
       const routeIds: string[] = [];
 
       for (const route of routes) {
@@ -60,11 +58,11 @@ export class KongService {
         }
       }
 
-      const apiKey = await this.generateApiKey(uploadId);
+      const apiKey = await this.generateApiKey(serviceIdentifier);
 
       const gatewayUrl = this.config.gatewayUrl;
 
-      this.logger.info(`Successfully registered API ${uploadId} at ${gatewayUrl}`);
+      this.logger.info(`Successfully registered API ${serviceIdentifier} at ${gatewayUrl}`);
 
       return {
         serviceId,
@@ -113,14 +111,30 @@ export class KongService {
     }
   }
 
+  async getExistingRoutes(): Promise<Array<{ path: string; methods: string[]; name: string }>> {
+    try {
+      const response = await this.client.get('/routes');
+      const existingRoutes = response.data.data || [];
+      
+      return existingRoutes.map((route: any) => ({
+        path: route.paths?.[0] || 'unknown',
+        methods: route.methods || [],
+        name: route.name || route.id,
+      }));
+    } catch (error: any) {
+      this.logger.error('Failed to fetch existing routes', { error });
+      return [];
+    }
+  }
+
   async checkConflicts(
-    uploadId: string,
+    serviceIdentifier: string,
     openApiSpec: OpenApiSpec,
   ): Promise<{ hasConflicts: boolean; conflicts: Array<{ path: string; method: string; existingRoute: string }> }> {
-    this.logger.info(`Checking for route conflicts for ${uploadId}`);
+    this.logger.info(`Checking for route conflicts for ${serviceIdentifier}`);
     
     const conflicts: Array<{ path: string; method: string; existingRoute: string }> = [];
-    const routes = this.generateRoutesFromOpenApi(uploadId, openApiSpec);
+    const routes = this.generateRoutesFromOpenApi(serviceIdentifier, openApiSpec);
 
     try {
       const response = await this.client.get('/routes');
@@ -188,7 +202,7 @@ export class KongService {
   }
 
   private generateRoutesFromOpenApi(
-    uploadId: string,
+    serviceIdentifier: string,
     openApiSpec: OpenApiSpec,
   ): KongRouteConfig[] {
     const routes: KongRouteConfig[] = [];
@@ -199,7 +213,9 @@ export class KongService {
       );
 
       if (methods.length > 0) {
-        const routeName = `justpush-${uploadId}-${path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        // Use cleaner route naming: service-name + sanitized-path
+        const sanitizedPath = path.replace(/[^a-zA-Z0-9]/g, '-').replace(/^-+|-+$/g, '');
+        const routeName = `${serviceIdentifier}-${sanitizedPath}`;
         const routePath = path;
 
         routes.push({
@@ -213,7 +229,7 @@ export class KongService {
 
     if (routes.length === 0) {
       routes.push({
-        name: `justpush-${uploadId}-default`,
+        name: `${serviceIdentifier}-default`,
         paths: ['/'],
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         stripPath: false,

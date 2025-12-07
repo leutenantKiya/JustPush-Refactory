@@ -183,6 +183,7 @@ export const ImporterComponent = () => {
   const [branch, setBranch] = useState('main');
   const [path, setPath] = useState('');
   const [domain, setDomain] = useState('https://api.example.com');
+  const [projectName, setProjectName] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -195,6 +196,7 @@ export const ImporterComponent = () => {
   const [registering, setRegistering] = useState(false);
   const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<Array<{ path: string; method: string; existingRoute: string }>>([]);
+  const [conflictAlert, setConflictAlert] = useState(false);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -306,6 +308,7 @@ export const ImporterComponent = () => {
         },
         body: JSON.stringify({
           baseUrl: apiBaseUrl,
+          projectName: projectName.trim() || undefined,
         }),
       });
 
@@ -369,21 +372,12 @@ export const ImporterComponent = () => {
 
       if (conflictData.hasConflicts) {
         setConflicts(conflictData.conflicts);
-        
-        const conflictList = conflictData.conflicts
-          .map((c: any) => `${c.method} ${c.path} (conflicts with ${c.existingRoute})`)
-          .join('\n');
-        
-        const proceed = window.confirm(
-          `Warning: Found ${conflictData.conflicts.length} conflicting route(s):\n\n${conflictList}\n\nDo you want to continue anyway?`
-        );
-
-        if (!proceed) {
-          setRegistering(false);
-          return;
-        }
+        setConflictAlert(true);
+        setRegistering(false);
+        return;
       } else {
         setConflicts([]);
+        setConflictAlert(false);
       }
 
       const response = await fetchApi.fetch(`${baseUrl}/register-kong/${uploadId}`, {
@@ -395,6 +389,7 @@ export const ImporterComponent = () => {
           serviceName,
           serviceUrl,
           openApiSpec: analyzeResult.openApiSpec,
+          projectName: projectName.trim() || undefined,
         }),
       });
 
@@ -426,7 +421,30 @@ export const ImporterComponent = () => {
 
       <Paper className={classes.paper}>
         <Grid container spacing={3} style={{ marginBottom: 32 }}>
-          <Grid item xs={12}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              label="Project Name (Optional)"
+              variant="outlined"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="my-awesome-api"
+              helperText="Custom name for your API project (e.g., user-service, payment-api)"
+              InputProps={{
+                style: {
+                  borderRadius: 12,
+                  backgroundColor: '#2a2a2a',
+                  fontSize: '0.9375rem',
+                  color: '#e0e0e0',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                },
+              }}
+              InputLabelProps={{
+                style: { color: '#b0b0b0', fontSize: '0.9375rem', fontWeight: 500 },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               label="API Domain / Base URL"
@@ -434,7 +452,7 @@ export const ImporterComponent = () => {
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
               placeholder="https://api.example.com"
-              helperText="This will be used as the base URL in your generated OpenAPI specification"
+              helperText="Base URL for your API endpoints"
               InputProps={{
                 style: {
                   borderRadius: 12,
@@ -711,6 +729,70 @@ export const ImporterComponent = () => {
               </TableBody>
             </Table>
           </TableContainer>
+
+          {conflictAlert && conflicts.length > 0 && (
+            <Box mt={3}>
+              <Alert 
+                severity="warning" 
+                onClose={() => setConflictAlert(false)}
+                style={{ 
+                  backgroundColor: 'rgba(255, 152, 0, 0.15)', 
+                  color: '#ffb74d',
+                  border: '1px solid rgba(255, 152, 0, 0.3)',
+                  borderRadius: 12
+                }}
+              >
+                <Box>
+                  <Typography variant="subtitle2" style={{ fontWeight: 600, marginBottom: 8, color: '#ffb74d' }}>
+                    Found {conflicts.length} Conflicting Route{conflicts.length > 1 ? 's' : ''}
+                  </Typography>
+                  <Box mb={2}>
+                    {conflicts.slice(0, 5).map((conflict, idx) => (
+                      <Typography key={idx} variant="body2" style={{ fontSize: '0.8125rem', color: '#d0d0d0', marginBottom: 4 }}>
+                        • <code style={{ backgroundColor: 'rgba(255, 152, 0, 0.2)', padding: '2px 6px', borderRadius: 4 }}>{conflict.method} {conflict.path}</code> conflicts with <strong>{conflict.existingRoute}</strong>
+                      </Typography>
+                    ))}
+                    {conflicts.length > 5 && (
+                      <Typography variant="caption" style={{ color: '#9a9a9a', fontStyle: 'italic' }}>
+                        ...and {conflicts.length - 5} more
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box display="flex" style={{ gap: 8 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={handleAnalyze}
+                      disabled={analyzing}
+                      style={{
+                        borderColor: '#ffb74d',
+                        color: '#ffb74d',
+                        borderRadius: 8,
+                        textTransform: 'none',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500
+                      }}
+                    >
+                      Re-analyze API
+                    </Button>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => setConflictAlert(false)}
+                      style={{
+                        color: '#9a9a9a',
+                        borderRadius: 8,
+                        textTransform: 'none',
+                        fontSize: '0.8125rem'
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </Box>
+                </Box>
+              </Alert>
+            </Box>
+          )}
         </Paper>
       )}
 

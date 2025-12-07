@@ -147,6 +147,7 @@ OpenAPI Specification:`;
     detectedPaths: DetectedPath[],
     projectName: string = 'API Project',
     baseUrl?: string,
+    existingRoutes?: Array<{ path: string; methods: string[]; name: string }>,
   ): Promise<string> {
     if (!this.genAI || !this.model) {
       throw new Error('Gemini API key not configured. Please set GEMINI_API_KEY in environment or config.');
@@ -155,7 +156,7 @@ OpenAPI Specification:`;
     this.logger.info(`Generating OpenAPI spec from ${endpoints.length} detected endpoints`);
 
     try {
-      const prompt = this.buildEndpointsPrompt(endpoints, detectedPaths, projectName, baseUrl);
+      const prompt = this.buildEndpointsPrompt(endpoints, detectedPaths, projectName, baseUrl, existingRoutes);
 
       this.logger.info('Calling Gemini API to generate OpenAPI spec from endpoints...');
       const result = await this.model.generateContent(prompt);
@@ -177,6 +178,7 @@ OpenAPI Specification:`;
     detectedPaths: DetectedPath[],
     projectName: string,
     baseUrl?: string,
+    existingRoutes?: Array<{ path: string; methods: string[]; name: string }>,
   ): string {
     const endpointsList = endpoints
       .map(e => `  ${e.method} ${e.path} (${e.file}:${e.line})`)
@@ -189,7 +191,23 @@ OpenAPI Specification:`;
 
     const serverUrl = baseUrl || 'https://api.example.com';
 
-    return `You are an expert API documentation specialist. Generate a complete and professional OpenAPI 3.0 specification in JSON format based on the following detected API endpoints.
+    const existingRoutesSection = existingRoutes && existingRoutes.length > 0
+      ? `
+
+**IMPORTANT - Existing Routes in Kong Gateway:**
+The following routes are already registered in Kong Gateway. You MUST avoid creating conflicting paths:
+${existingRoutes.map(r => `  ${r.methods.join(', ') || 'ANY'} ${r.path} (${r.name})`).join('\n')}
+
+**Conflict Avoidance Strategy:**
+- If a detected endpoint conflicts with an existing route, modify the path by adding a version prefix or unique suffix
+- Example: if /api/users exists, use /api/v2/users or /api/users-${projectName}
+- Keep path modifications short and readable (avoid long IDs in paths)
+- Ensure all generated paths are unique and do not match existing routes
+- Document any path modifications in the endpoint descriptions
+`
+      : '';
+
+    return `You are an expert API documentation specialist. Generate a complete and professional OpenAPI 3.0 specification in JSON format based on the following detected API endpoints.${existingRoutesSection}
 
 Project Information:
 - Project Name: ${projectName}
@@ -204,7 +222,7 @@ ${endpointsList}
 Instructions:
 1. Generate a complete OpenAPI 3.0 specification in JSON format (not YAML)
 2. Create an appropriate info section with:
-   - title: "${projectName} API"
+   - title: "${projectName}"
    - version: "1.0.0"
    - description: Detailed description of the API's purpose and capabilities
 3. **IMPORTANT**: Add a servers section with the base URL:
