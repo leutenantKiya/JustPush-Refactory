@@ -1,37 +1,37 @@
-# Apache Web Server Deployment
-resource "kubernetes_deployment" "apache" {
+# Redis Cache Deployment
+resource "kubernetes_deployment" "redis" {
   metadata {
-    name      = var.app_name
-    namespace = var.namespace
+    name      = "redis-cache"
+    namespace = "mau-menang"
     labels = {
-      app = var.app_name
+      app = "redis-cache"
     }
   }
 
   spec {
-    replicas = var.replicas
+    replicas = 1
 
     selector {
       match_labels = {
-        app = var.app_name
+        app = "redis-cache"
       }
     }
 
     template {
       metadata {
         labels = {
-          app = var.app_name
+          app = "redis-cache"
         }
       }
 
       spec {
         container {
-          image = "httpd:2.4-alpine"
-          name  = "apache"
+          image = "redis:alpine"
+          name  = "redis"
 
-          ports {
-            container_port = 80
-            name           = "http"
+          port {
+            container_port = 6379
+            name           = "redis"
           }
 
           resources {
@@ -46,18 +46,16 @@ resource "kubernetes_deployment" "apache" {
           }
 
           liveness_probe {
-            http_get {
-              path = "/"
-              port = 80
+            exec {
+              command = ["redis-cli", "ping"]
             }
             initial_delay_seconds = 30
             period_seconds        = 10
           }
 
           readiness_probe {
-            http_get {
-              path = "/"
-              port = 80
+            exec {
+              command = ["redis-cli", "ping"]
             }
             initial_delay_seconds = 5
             period_seconds        = 5
@@ -68,27 +66,26 @@ resource "kubernetes_deployment" "apache" {
   }
 }
 
-# Apache Service
-resource "kubernetes_service" "apache" {
+resource "kubernetes_service" "redis" {
   metadata {
-    name      = "${var.app_name}-service"
-    namespace = var.namespace
+    name      = "redis-service"
+    namespace = "mau-menang"
     labels = {
-      app = var.app_name
+      app = "redis-cache"
     }
   }
 
   spec {
     selector = {
-      app = var.app_name
+      app = "redis-cache"
     }
 
     port {
-      port        = var.service_port
-      target_port = 80
+      port        = 6379
+      target_port = 6379
       protocol    = "TCP"
     }
 
-    type = "NodePort"
+    type = "ClusterIP"
   }
 }

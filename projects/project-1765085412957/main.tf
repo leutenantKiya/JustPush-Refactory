@@ -1,33 +1,33 @@
-# Apache Web Server Deployment
-resource "kubernetes_deployment" "apache" {
+# Nginx Web Server Deployment
+resource "kubernetes_deployment" "nginx" {
   metadata {
-    name      = var.app_name
-    namespace = var.namespace
+    name      = "nginx-webserver"
+    namespace = "mau-menang"
     labels = {
-      app = var.app_name
+      app = "nginx-webserver"
     }
   }
 
   spec {
-    replicas = var.replicas
+    replicas = 2
 
     selector {
       match_labels = {
-        app = var.app_name
+        app = "nginx-webserver"
       }
     }
 
     template {
       metadata {
         labels = {
-          app = var.app_name
+          app = "nginx-webserver"
         }
       }
 
       spec {
         container {
-          image = "httpd:2.4-alpine"
-          name  = "apache"
+          image = "nginx:alpine"
+          name  = "nginx"
 
           port {
             container_port = 80
@@ -68,23 +68,22 @@ resource "kubernetes_deployment" "apache" {
   }
 }
 
-# Apache Service
-resource "kubernetes_service" "apache" {
+resource "kubernetes_service" "nginx" {
   metadata {
-    name      = "${var.app_name}-service"
-    namespace = var.namespace
+    name      = "nginx-service"
+    namespace = "mau-menang"
     labels = {
-      app = var.app_name
+      app = "nginx-webserver"
     }
   }
 
   spec {
     selector = {
-      app = var.app_name
+      app = "nginx-webserver"
     }
 
     port {
-      port        = var.service_port
+      port        = 80
       target_port = 80
       protocol    = "TCP"
     }

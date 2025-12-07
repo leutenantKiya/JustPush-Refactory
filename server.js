@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 9000;
+const PORT = process.env.PORT || 9001;
 
 app.use(cors());
 app.use(express.json());
@@ -64,6 +64,19 @@ const getKubeconfigInfo = () => {
     context: 'mau-menang',
     configPath: path.join(__dirname, 'kubeconfig.yaml')
   };
+};
+
+// Helper function to check if Terraform is installed
+const checkTerraformInstalled = () => {
+  return new Promise((resolve) => {
+    exec('terraform version', (error, stdout, stderr) => {
+      if (error) {
+        resolve(false);
+      } else {
+        resolve(true);
+      }
+    });
+  });
 };
 
 // Helper function to extract Terraform code from text response
@@ -326,7 +339,7 @@ resource "kubernetes_deployment" "phpmyadmin" {
           image = "phpmyadmin/phpmyadmin:latest"
           name  = "phpmyadmin"
 
-          ports {
+          port {
             container_port = 80
             name           = "http"
           }
@@ -540,7 +553,7 @@ resource "kubernetes_deployment" "apache" {
           image = "httpd:2.4-alpine"
           name  = "apache"
 
-          ports {
+          port {
             container_port = 80
             name           = "http"
           }
@@ -702,7 +715,7 @@ resource "kubernetes_deployment" "nginx" {
           image = "nginx:alpine"
           name  = "nginx"
 
-          ports {
+          port {
             container_port = 80
             name           = "http"
           }
@@ -828,7 +841,7 @@ resource "kubernetes_deployment" "mysql" {
           image = "mysql:8.0"
           name  = "mysql"
 
-          ports {
+          port {
             container_port = 3306
             name           = "mysql"
           }
@@ -962,7 +975,7 @@ resource "kubernetes_deployment" "redis" {
           image = "redis:alpine"
           name  = "redis"
 
-          ports {
+          port {
             container_port = 6379
             name           = "redis"
           }
@@ -1088,6 +1101,23 @@ app.post('/api/terraform/:command', async (req, res) => {
       return res.status(400).json({ error: 'Invalid terraform command' });
     }
 
+    // Check if Terraform is installed
+    const terraformInstalled = await checkTerraformInstalled();
+    if (!terraformInstalled) {
+      const installationInstructions = {
+        error: 'Terraform is not installed on the server',
+        message: 'To use this application, Terraform must be installed on the server where this application is running.',
+        installation: {
+          linux: 'curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" && sudo apt-get update && sudo apt-get install terraform',
+          macos: 'brew tap hashicorp/tap && brew install hashicorp/tap/terraform',
+          windows: 'choco install terraform',
+          manual: 'Download from https://www.terraform.io/downloads.html and add to PATH'
+        },
+        note: 'After installing Terraform, restart the application server.'
+      };
+      return res.status(500).json(installationInstructions);
+    }
+
     const cmd = `cd ${projectDir} && terraform ${command} ${command === 'apply' ? '-auto-approve' : ''}`;
 
     exec(cmd, (error, stdout, stderr) => {
@@ -1108,6 +1138,38 @@ app.post('/api/terraform/:command', async (req, res) => {
     });
   } catch (error) {
     console.error('Error running terraform command:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to check Terraform installation status
+app.get('/api/terraform/status', async (req, res) => {
+  try {
+    const terraformInstalled = await checkTerraformInstalled();
+
+    if (terraformInstalled) {
+      exec('terraform version', (error, stdout, stderr) => {
+        const version = stdout.split('\n')[0] || 'Unknown version';
+        res.json({
+          installed: true,
+          version: version,
+          message: 'Terraform is installed and ready to use'
+        });
+      });
+    } else {
+      res.json({
+        installed: false,
+        message: 'Terraform is not installed',
+        installation: {
+          linux: 'curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add - && sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" && sudo apt-get update && sudo apt-get install terraform',
+          macos: 'brew tap hashicorp/tap && brew install hashicorp/tap/terraform',
+          windows: 'choco install terraform',
+          manual: 'Download from https://www.terraform.io/downloads.html and add to PATH'
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error checking Terraform status:', error);
     res.status(500).json({ error: error.message });
   }
 });
