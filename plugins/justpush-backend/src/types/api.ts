@@ -75,3 +75,48 @@ export interface AnalyzeApiResponse {
     model: string;
   };
 }
+
+// Kong
+
+export interface KongServiceConfig {
+  name: string;
+  url: string;
+  retries?: number;
+  connectTimeout?: number;
+  writeTimeout?: number;
+  readTimeout?: number;
+}
+
+export interface KongRouteConfig {
+  name: string;
+  paths: string[];
+  methods: string[];
+  stripPath?: boolean;
+}
+
+export interface KongPluginConfig {
+  name: string;
+  config: Record<string, any>;
+}
+
+export interface KongRegistrationResult {
+  serviceId: string;
+  routeIds: string[];
+  apiKey?: string;
+  gatewayUrl: string;
+}
+
+export interface KongConfig {
+  adminUrl: string;
+  adminToken?: string;
+  gatewayUrl: string;
+}
+
+export interface OpenApiSpec {
+  openapi: string;
+  info: {
+    title: string;
+    version: string;
+  };
+  paths: Record<string, Record<string, any>>;
+}

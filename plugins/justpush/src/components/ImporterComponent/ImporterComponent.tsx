@@ -740,6 +740,21 @@ export const ImporterComponent = () => {
               </Grid>
             )}
           </Grid>
+
+          <Box display="flex" justifyContent="center" mt={3}>
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              className={classes.button}
+              style={{ padding: '12px 32px', fontSize: '0.9375rem' }}
+              onClick={() => {
+                console.log('Register to Kong API clicked');
+              }}
+            >
+              Register to Kong API
+            </Button>
+          </Box>
         </Paper>
       )}
     </Box>
