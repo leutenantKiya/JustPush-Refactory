@@ -1,0 +1,5 @@
+{
+  "name": "KubeGenius Terraform Studio",
+  "description": "An AI-powered infrastructure generator that creates Terraform configurations for Kubernetes deployments and simulates the execution process.",
+  "requestFramePermissions": []
+}
