@@ -62,7 +62,7 @@ export class KongService {
 
       const apiKey = await this.generateApiKey(uploadId);
 
-      const gatewayUrl = `${this.config.gatewayUrl}/${uploadId}`;
+      const gatewayUrl = this.config.gatewayUrl;
 
       this.logger.info(`Successfully registered API ${uploadId} at ${gatewayUrl}`);
 
@@ -200,7 +200,7 @@ export class KongService {
 
       if (methods.length > 0) {
         const routeName = `justpush-${uploadId}-${path.replace(/[^a-zA-Z0-9]/g, '-')}`;
-        const routePath = `/${uploadId}${path}`;
+        const routePath = path;
 
         routes.push({
           name: routeName,
@@ -214,9 +214,9 @@ export class KongService {
     if (routes.length === 0) {
       routes.push({
         name: `justpush-${uploadId}-default`,
-        paths: [`/${uploadId}`],
+        paths: ['/'],
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-        stripPath: true,
+        stripPath: false,
       });
     }
 
