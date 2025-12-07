@@ -96,8 +96,7 @@ This project is primarily built with:
 * [Express](https://expressjs.com/)
 * [Docker](https://www.docker.com/) (for deployments)
 * [GitHub Actions](https://github.com/features/actions)
-
-Depending on usage, additional libraries and scripts may be included.
+* [Backstage](https://backstage.io/plugins/)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
