@@ -187,7 +187,7 @@ OpenAPI Specification:`;
       .filter(f => f)
       .join(', ');
 
-    const serverUrl = baseUrl || '/api';
+    const serverUrl = baseUrl || 'https://api.example.com';
 
     return `You are an expert API documentation specialist. Generate a complete and professional OpenAPI 3.0 specification in JSON format based on the following detected API endpoints.
 

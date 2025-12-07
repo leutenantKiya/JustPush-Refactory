@@ -283,7 +283,6 @@ export const ImporterComponent = () => {
     setAnalysisProgress(0);
 
     try {
-      // Simulate progress steps
       setAnalysisStep('Preparing files...');
       setAnalysisProgress(10);
       
@@ -292,13 +291,19 @@ export const ImporterComponent = () => {
       setAnalysisProgress(30);
 
       const baseUrl = await discoveryApi.getBaseUrl('justpush');
-      console.log(`Analyzing project with uploadId: ${uploadId}, URL: ${baseUrl}/analyze/${uploadId}`);
+      const apiBaseUrl = domain && domain.trim() !== '' ? domain : 'https://api.example.com';
       
       setAnalysisStep('Analyzing API patterns...');
       setAnalysisProgress(50);
       
       const response = await fetchApi.fetch(`${baseUrl}/analyze/${uploadId}`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          baseUrl: apiBaseUrl,
+        }),
       });
 
       if (!response.ok) {
