@@ -77,10 +77,10 @@
 *JustPush-Refactory* is an open source tool designed to streamline and safeguard your deployment workflow, ensuring that pushing code is as easy as possible for teams of any size.
 
 ### Why JustPush-Refactory?
-- Automates repetitive deployment tasks
-- Reduces chances for human error and failed deploys
-- Integrates with popular CI/CD pipelines and services
-- Lightweight, easy to set up, and customizable
+  - Mengotomatisasi tugas deployment yang berulang
+  - Mengurangi kemungkinan kesalahan manusia dan kegagalan deploy
+  - Ringan, mudah diatur, dan dapat dikustomisasi
+  - Mempercepat waktu kerja developer
 
 Feel free to contribute ideas, submit issues, fork the repo, or create a pull request. Let’s build a better deployment experience together!
 
@@ -94,9 +94,11 @@ This project is primarily built with:
 
 * [Node.js](https://nodejs.org/)
 * [Express](https://expressjs.com/)
-* [Docker](https://www.docker.com/) (for deployments)
+* [Docker](https://www.docker.com/) (for container runtime)
+* [k3s](https://k3s.io/)
 * [GitHub Actions](https://github.com/features/actions)
-* [Backstage](https://backstage.io/plugins/)
+* [Backstage](https://backstage.io/)
+* [PostgreSQL](https://www.postgresql.org/) (for database)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
